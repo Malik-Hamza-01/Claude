@@ -1,0 +1,1612 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Jarvis Day Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one "Now" card (ring = time left in the current window) above a Fajr->Isha timeline;
+   sections for Prayer / Gym / Work / Study / Diet / Setup. Single deliberate dark look: tactical red HUD (Malik's palette). */
+:root {
+  color-scheme: dark;
+  --bg: #050608; --panel: #0D0A0B; --panel-2: #1A0D0F; --line: #351416; --line-2: #4d1d21; --row: #1e1012;
+  --text: #F5F5F5; --muted: #8F8587; --dim: #6a6062;
+  --accent: #FF3B3B; --accent-2: #FF5A5A; --glow: rgba(255,59,59,.35); --btn: #c42a2f;
+  --ok: #3ED598; --ok-ink: #032316; --warn: #FFB84D; --warn-bg: #2a1c08; --err: #FF5A5A; --err-bg: #2c0d10;
+  --display: "Chakra Petch", "Arial Narrow", sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+#focusForm { flex-wrap: wrap; } #focusIn { flex: 1 1 100%; } #focusArea { flex: 1 1 140px; }
+html, body { height: 100%; }
+body { margin: 0; background: radial-gradient(ellipse 120% 60% at 50% -10%, #2a0b0e 0%, var(--bg) 60%) fixed, var(--bg); color: var(--text); font: 16px/1.5 var(--body); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 14px 96px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* header */
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.brand { font: 700 20px/1 var(--display); letter-spacing: .3em; color: var(--accent); text-shadow: 0 0 14px var(--glow); }
+.clock { font: 500 14px var(--mono); color: var(--muted); }
+header .sp { flex: 1; }
+.btn { border-radius: 9px; padding: 8px 14px; border: 1px solid var(--line-2); background: var(--panel); font-weight: 500; }
+.btn:hover { border-color: var(--accent-2); }
+.btn.pri { background: var(--btn); border-color: var(--btn); color: #fff; }
+.btn.ok { background: var(--ok); border-color: var(--ok); color: var(--ok-ink); font-weight: 600; }
+.btn.sm { padding: 5px 10px; font-size: 14px; }
+.btn.on { border-color: var(--ok); color: var(--ok); }
+.btn:disabled { opacity: .45; cursor: default; }
+.tag { font: 500 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 5px 7px; border-radius: 6px; border: 1px solid var(--line-2); color: var(--muted); white-space: nowrap; }
+.tag.live { color: var(--ok); border-color: #1f6b4a; }
+.tag.warn { color: var(--warn); border-color: #6b4d12; }
+
+/* nav */
+nav.tabs { display: flex; gap: 6px; margin: 14px 0; flex-wrap: wrap; }
+nav.tabs button { background: none; border: 1px solid transparent; border-radius: 9px; padding: 7px 14px; color: var(--muted); font: 600 14px var(--display); letter-spacing: .12em; text-transform: uppercase; }
+nav.tabs button[aria-current="true"] { color: var(--accent); border-color: var(--line-2); background: var(--panel); }
+
+/* alert banner */
+.alert { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border: 1px solid #6b4d12; background: var(--warn-bg); border-radius: 12px; padding: 10px 14px; margin-top: 12px; }
+.alert .t { flex: 1; min-width: 200px; } .alert b { color: var(--warn); }
+
+/* now card */
+.now { position: relative; display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 22px; align-items: center;
+       background: linear-gradient(160deg, #1A0D0F, #0D0A0B); border: 1px solid var(--line-2); border-radius: 18px; padding: 22px; box-shadow: 0 0 46px rgba(255,59,59,.10) inset; }
+.now.tense { border-color: #7a5512; box-shadow: 0 0 40px rgba(255,190,85,.10) inset; }
+.now.crit { border-color: var(--accent); box-shadow: 0 0 50px rgba(255,59,59,.22) inset; }
+.ring { width: 170px; height: 170px; }
+.ring circle { fill: none; stroke-width: 9; }
+.ring .bg { stroke: #2a1214; } .ring .fg { stroke: var(--accent); stroke-linecap: round; filter: drop-shadow(0 0 6px var(--glow)); transition: stroke-dashoffset .6s; }
+.now.tense .ring .fg { stroke: var(--warn); } .now.crit .ring .fg { stroke: var(--err); }
+.ring text { fill: var(--text); font-family: var(--mono); text-anchor: middle; }
+.ring .big { font-size: 26px; font-weight: 500; } .ring .lbl { font-size: 10px; fill: var(--muted); letter-spacing: .14em; }
+.now .eyebrow { font: 600 12px var(--display); letter-spacing: .22em; text-transform: uppercase; color: var(--accent); }
+.now.tense .eyebrow { color: var(--warn); } .now.crit .eyebrow { color: var(--err); }
+.now h2 { margin: 4px 0 6px; font: 700 clamp(26px, 4.4vw, 38px)/1.1 var(--display); text-wrap: balance; }
+.now .say { color: var(--muted); font-size: 16.5px; max-width: 60ch; }
+.now .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.quote { margin-top: 12px; display: flex; gap: 12px; align-items: flex-start; border-left: 2px solid var(--accent-2); padding: 6px 0 6px 14px; color: #d9cfd0; font-style: italic; }
+.quote .q { flex: 1; } .quote button { background: none; border: 0; color: var(--dim); font: 500 12px var(--mono); }
+
+/* timeline */
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-width: 0; }
+.card h3 { margin: 0 0 10px; font: 600 13px var(--display); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.tl { list-style: none; margin: 0; padding: 0; }
+.tl li { display: grid; grid-template-columns: 76px 18px minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--row); }
+.tl li:last-child { border-bottom: 0; }
+.tl .tm { font: 500 14px var(--mono); color: var(--muted); }
+.tl .dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--dim); justify-self: center; }
+.tl li.done .dot { background: var(--ok); border-color: var(--ok); }
+.tl li.miss .dot { background: var(--err); border-color: var(--err); }
+.tl li.cur .dot { border-color: var(--accent); box-shadow: 0 0 8px var(--glow); }
+.tl li.cur .nm { color: var(--accent); }
+.tl .nm { font-weight: 500; overflow-wrap: anywhere; } .tl .st { font-size: 13px; color: var(--muted); text-align: right; }
+.stat { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--row); }
+.stat:last-child { border-bottom: 0; } .stat span:first-child { color: var(--muted); }
+.meter { height: 8px; border-radius: 99px; background: var(--row); overflow: hidden; margin: 6px 0 2px; }
+.meter i { display: block; height: 100%; background: var(--accent); }
+.meter.ok i { background: var(--ok); }
+.ask { display: flex; gap: 8px; margin-top: 10px; }
+.ask input, .field input, .field select, textarea { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; }
+.reply { margin-top: 10px; white-space: pre-wrap; color: #e6dcdd; }
+.thinking { color: var(--dim); font-style: italic; }
+
+/* prayer */
+.prow { display: grid; grid-template-columns: 110px 84px minmax(0,1fr); gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--row); }
+.prow:last-child { border-bottom: 0; }
+.prow .pn { font: 600 18px var(--display); letter-spacing: .06em; }
+.prow .pt { font: 500 15px var(--mono); color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 9px; overflow: hidden; flex-wrap: wrap; }
+.seg button { background: none; border: 0; padding: 6px 11px; font-size: 14px; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line-2); }
+.seg button[aria-pressed="true"][data-v="ontime"] { background: var(--ok); color: var(--ok-ink); font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="late"] { background: var(--warn); color: #241800; font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="qaza"] { background: var(--err); color: #2a0408; font-weight: 600; }
+.week { display: grid; grid-template-columns: 70px repeat(5, 1fr); gap: 4px; font-size: 12px; }
+.week .c { height: 22px; border-radius: 5px; background: var(--row); }
+.week .c.ontime { background: var(--ok); } .week .c.late { background: var(--warn); } .week .c.qaza { background: var(--err); }
+.week .d { color: var(--muted); font-family: var(--mono); align-self: center; }
+
+/* gym */
+.ex { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--row); }
+.ex:last-child { border-bottom: 0; }
+.ex input { width: 18px; height: 18px; accent-color: var(--ok); }
+.ex .sr { font: 500 13px var(--mono); color: var(--muted); }
+.ex.done .nm { color: var(--muted); text-decoration: line-through; }
+
+/* diet */
+.meal { padding: 9px 0; border-bottom: 1px solid var(--row); display: grid; grid-template-columns: 70px minmax(0,1fr) auto; gap: 10px; }
+.meal:last-child { border-bottom: 0; }
+.meal .tm { font: 500 13px var(--mono); color: var(--muted); }
+.meal .mc { font: 500 13px var(--mono); color: var(--accent); text-align: right; white-space: nowrap; }
+.meal .x { background: none; border: 0; color: var(--dim); }
+
+/* setup */
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.field label { font-size: 13px; color: var(--muted); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; } .row > .field { flex: 1 1 140px; }
+.daysgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.hint { font-size: 13px; color: var(--dim); }
+.saved { font: 12px var(--mono); color: var(--ok); }
+
+/* section quote, gym session, work timer */
+.squote { border-left: 2px solid var(--accent); padding: 8px 0 8px 14px; margin-bottom: 14px; color: #d9cfd0; font-style: italic; font-size: 16.5px; }
+.squote b { display: block; font: 600 11px var(--display); letter-spacing: .2em; text-transform: uppercase; color: var(--accent); font-style: normal; margin-bottom: 3px; }
+.session { font: 700 clamp(34px, 7vw, 52px)/1 var(--display); letter-spacing: .04em; color: var(--accent); text-shadow: 0 0 18px var(--glow); margin: 4px 0 6px; }
+.session.rest { color: var(--muted); text-shadow: none; }
+.timer { font: 500 clamp(40px, 9vw, 64px)/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: .02em; margin: 6px 0; }
+.timer.live { color: var(--accent); text-shadow: 0 0 16px var(--glow); }
+.wsess { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--row); font-size: 15px; }
+.wsess:last-child { border-bottom: 0; } .wsess .d { font: 500 14px var(--mono); color: var(--muted); }
+.wsess .x { background: none; border: 0; color: var(--dim); }
+.bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 110px; margin-top: 8px; }
+.bars div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; font: 11px var(--mono); color: var(--muted); }
+.bars i { display: block; width: 70%; min-height: 2px; background: var(--accent); border-radius: 3px 3px 0 0; opacity: .85; }
+.bars .today i { opacity: 1; box-shadow: 0 0 8px var(--glow); }
+
+/* work sub-tabs, CRM, agency, projects, study, sleep */
+.subtabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.subtabs button { background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; color: var(--muted); font: 600 13px var(--display); letter-spacing: .08em; }
+.subtabs button[aria-current="true"] { color: #fff; background: var(--btn); border-color: var(--btn); }
+.inp { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; min-width: 0; }
+.meter.big { height: 12px; }
+.fprompt { border: 1px solid #6b4d12; background: var(--warn-bg); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.fprompt select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px; }
+.eyebrow-s { font: 600 12px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--warn); margin-bottom: 8px; }
+.verdict { border: 1px solid var(--line-2); border-radius: 12px; padding: 12px; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.verdict.keep { border-color: #1f6b4a; } .verdict.adjust { border-color: #6b4d12; } .verdict.switch { border-color: var(--accent); }
+.verdict .vd { font: 700 12px var(--display); letter-spacing: .12em; text-transform: uppercase; }
+.verdict.keep .vd { color: var(--ok); } .verdict.adjust .vd { color: var(--warn); } .verdict.switch .vd { color: var(--accent); }
+.flog, .slot { display: grid; grid-template-columns: 76px minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--row); font-size: 14.5px; }
+.slot { grid-template-columns: 190px minmax(0,1fr); } .slot.cur .tm { color: var(--accent); }
+.flog .tm, .slot .tm { font: 500 13px var(--mono); color: var(--muted); }
+.stages { display: flex; gap: 6px; flex-wrap: wrap; }
+.stage { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 6px 10px; font-size: 13px; color: var(--muted); }
+.stage b { color: var(--text); margin-left: 4px; font-family: var(--mono); } .stage .sn { font: 500 11px var(--mono); color: var(--dim); margin-right: 5px; }
+.stage.on { border-color: var(--accent); color: var(--text); }
+.radar { margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: var(--warn-bg); border: 1px solid #6b4d12; font-size: 14px; }
+.linkbtn { background: none; border: 0; color: var(--warn); text-decoration: underline; padding: 0; }
+.lead { display: grid; grid-template-columns: minmax(0,1fr) auto 92px; gap: 10px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--row); cursor: pointer; }
+.lead:hover { background: rgba(255,59,59,.04); } .lead select, .client select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 6px; font-size: 13px; }
+.lmain { display: flex; flex-direction: column; min-width: 0; } .lmain .hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.due { color: var(--warn); font-size: 13px; }
+.leditor { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 6px 0 12px; display: flex; flex-direction: column; gap: 4px; }
+.leditor .field { flex: 1 1 160px; margin-bottom: 6px; }
+.drafts { display: grid; gap: 10px; margin-top: 8px; } .dr { border-left: 2px solid var(--accent); padding-left: 10px; } .dr p { margin: 4px 0 6px; }
+.steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0 0 12px; counter-reset: s; flex-wrap: wrap; }
+.steps li { counter-increment: s; font: 600 12px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); padding: 6px 10px; border: 1px solid var(--line); border-radius: 99px; }
+.steps li::before { content: counter(s) "  "; } .steps li.on { color: var(--text); border-color: var(--accent); }
+.maprow { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.mapf { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.mapf select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px; color: var(--text); }
+.impcounts { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.tablewrap { overflow-x: auto; } .tbl { border-collapse: collapse; font-size: 13px; width: 100%; } .tbl th, .tbl td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--row); white-space: nowrap; } .tbl th { color: var(--muted); font-weight: 500; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.kpi span { font-size: 12.5px; color: var(--muted); } .kpi b { font-size: 18px; } .kpi.bad b { color: var(--err); }
+.client .lead { grid-template-columns: minmax(0,1fr) auto; }
+.h4 { font: 600 12px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 4px 0; }
+.dl { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 5px 0; } .dl input { accent-color: var(--ok); width: 17px; height: 17px; } .dl.done span:nth-child(2) { color: var(--muted); text-decoration: line-through; }
+.tm-row { padding: 10px 0; border-bottom: 1px solid var(--row); } .tmf { margin-top: 6px; align-items: flex-end; } .tmf label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); flex: 1 1 70px; }
+.x { background: none; border: 0; color: var(--dim); }
+.proj { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.proj select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 6px; }
+.projform { border: 1px solid var(--line-2); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); } .check input { accent-color: var(--accent); }
+.doc { background: #0a0708; border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; max-height: 70vh; overflow-y: auto; line-height: 1.65; }
+.doc h2, .doc h3, .doc h4 { font-family: var(--display); letter-spacing: .04em; margin: 16px 0 6px; } .doc h2 { color: var(--accent); font-size: 20px; } .doc p { margin: 0 0 10px; max-width: 75ch; }
+.chk { font-size: 14px; padding: 3px 0; } .chk.ok b { color: var(--ok); } .chk.bad b { color: var(--err); }
+textarea { width: 100%; resize: vertical; }
+
+/* bottom nav on phones */
+.bnav { display: none; }
+@media (max-width: 760px) {
+  .now { grid-template-columns: 1fr; justify-items: start; padding: 18px; }
+  .ring { width: 130px; height: 130px; }
+  .grid2 { grid-template-columns: 1fr; }
+  nav.tabs { display: none; }
+  .bnav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: rgba(5,6,8,.96); border-top: 1px solid var(--line);
+          padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); overflow-x: auto; gap: 2px; }
+  .bnav button { flex: 0 0 auto !important; padding: 8px 9px !important; }
+  .lead { grid-template-columns: minmax(0,1fr) auto; } .lead > .num { grid-column: 1 / -1; }
+  .slot { grid-template-columns: 1fr; }
+  .bnav button { background: none; border: 0; color: var(--muted); font: 600 10.5px var(--display); letter-spacing: .06em; text-transform: uppercase; padding: 8px 2px; flex: 1; }
+  .bnav button[aria-current="true"] { color: var(--accent); }
+  .prow { grid-template-columns: 76px 74px minmax(0,1fr); }
+  .clock { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ring .fg { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">J.A.R.V.I.S.</div>
+    <span class="clock num" id="clock"></span>
+    <span class="sp"></span>
+    <span class="tag" id="syncTag">Starting…</span>
+    <button class="btn sm" id="armBtn" title="Browsers only play sound after you tap once">Enable sound</button>
+    <button class="btn sm" id="checkBtn">Check in</button>
+  </header>
+
+  <div id="alertBox"></div>
+
+  <nav class="tabs" aria-label="Sections">
+    <button data-view="home" aria-current="true">Now</button>
+    <button data-view="prayer">Prayer</button>
+    <button data-view="gym">Gym</button>
+    <button data-view="work">Work</button>
+    <button data-view="study">Study</button>
+    <button data-view="diet">Diet</button>
+    <button data-view="sleep">Sleep</button>
+    <button data-view="setup">Setup</button>
+  </nav>
+
+  <!-- HOME -->
+  <section id="v-home">
+    <div class="now" id="nowCard">
+      <svg class="ring" viewBox="0 0 170 170" aria-hidden="true">
+        <circle class="bg" cx="85" cy="85" r="74"/>
+        <circle class="fg" id="ringFg" cx="85" cy="85" r="74" transform="rotate(-90 85 85)" stroke-dasharray="465" stroke-dashoffset="0"/>
+        <text class="big" x="85" y="88" id="ringBig">--:--</text>
+        <text class="lbl" x="85" y="110" id="ringLbl">LEFT</text>
+      </svg>
+      <div>
+        <div class="eyebrow" id="nowEyebrow">Now</div>
+        <h2 id="nowTitle">Calibrating…</h2>
+        <div class="say" id="nowSay"></div>
+        <div class="acts" id="nowActs"></div>
+      </div>
+    </div>
+    <div class="quote"><div class="q" id="quote"></div></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3><span>Today</span><span class="num" id="todayDate"></span></h3>
+        <ul class="tl" id="timeline"></ul>
+      </div>
+      <div class="card">
+        <h3><span>Status</span></h3>
+        <div class="stat"><span>Prayers on time</span><b class="num" id="sPray">0 / 5</b></div>
+        <div class="stat"><span>Gym</span><b id="sGym">—</b></div>
+        <div><div class="stat" style="border:0"><span>Protein</span><b class="num" id="sProt">0 / 0 g</b></div><div class="meter" id="mProt"><i style="width:0"></i></div></div>
+        <div><div class="stat" style="border:0"><span>Calories</span><b class="num" id="sKcal">0 / 0</b></div><div class="meter" id="mKcal"><i style="width:0"></i></div></div>
+        <div class="stat"><span>Work</span><b id="sWork">Not checked in</b></div>
+        <form class="ask" id="briefForm">
+          <input id="briefIn" placeholder="Ask Jarvis… “How am I doing today?”" aria-label="Ask Jarvis">
+          <button class="btn pri sm">Ask</button>
+        </form>
+        <div class="reply" id="briefOut"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRAYER -->
+  <section id="v-prayer" hidden>
+    <div class="squote" id="q-prayer"></div>
+    <div class="grid2">
+      <div class="card">
+        <h3><span>Today's prayers</span><span class="num" id="pCity"></span></h3>
+        <div id="prayerRows"></div>
+        <div class="hint" style="margin-top:8px">Hanafi Asr · Karachi method (18°/18°). Adjust minutes per prayer in Setup to match your mosque.</div>
+      </div>
+      <div class="card">
+        <h3><span>Last 7 days</span><span id="pStreak" class="num"></span></h3>
+        <div class="week" id="prayerWeek"></div>
+        <div class="hint" style="margin-top:10px">Green on time · amber late · red qaza · dark not logged</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GYM -->
+  <section id="v-gym" hidden>
+    <div class="squote" id="q-gym"></div>
+    <div class="grid2">
+      <div class="card">
+        <h3><span id="gymTitle">Today's session</span><span class="num" id="gymTime"></span></h3>
+        <div id="gymBody"></div>
+      </div>
+      <div class="card">
+        <h3><span>This week</span></h3>
+        <div id="gymWeek"></div>
+        <div class="hint" style="margin-top:10px">Fixed week: Mon Push · Tue Pull · Wed Legs · Thu Push · Fri Pull · Sat Legs · Sun rest.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WORK -->
+  <section id="v-work" hidden>
+    <div class="squote" id="q-work"></div>
+    <nav class="subtabs" id="workTabs" aria-label="Work sections">
+      <button data-wt="focus" aria-current="true">Focus</button>
+      <button data-wt="linkedin">LinkedIn</button>
+      <button data-wt="agency">Agency work</button>
+      <button data-wt="auto">Automation</button>
+    </nav>
+
+    <!-- Focus -->
+    <div id="wt-focus">
+      <div class="grid2">
+        <div class="card">
+          <h3><span id="wState">Not checked in</span><span class="num" id="wSince"></span></h3>
+          <div class="timer num" id="wTimer">0:00:00</div>
+          <div class="hint" id="wSub">Tap Check in when you start work. Jarvis counts until you check out.</div>
+          <div style="margin-top:14px"><button class="btn pri" id="wBtn">Check in</button></div>
+          <h3 style="margin-top:18px"><span>2-hour slots</span></h3>
+          <div id="wSlots"><p class="hint">Slots appear once you check in.</p></div>
+          <h3 style="margin-top:18px"><span>Today's sessions</span><span class="num" id="wToday">0h 00m</span></h3>
+          <div id="wList"></div>
+        </div>
+        <div class="card">
+          <h3><span>Important work today</span><span class="num" id="fImpTxt">0h 00m / 6h</span></h3>
+          <div class="meter big" id="fImpBar"><i style="width:0"></i></div>
+          <div class="hint" id="fSplit">Low-value time: 0h 00m</div>
+          <div id="fPrompt" class="fprompt" hidden>
+            <div class="eyebrow-s" id="fPromptTitle">What are you working on?</div>
+            <form id="focusForm" class="ask">
+              <input id="focusIn" placeholder="e.g. Writing proposal for Acme's SEO retainer" aria-label="What are you working on?">
+              <select id="focusArea" aria-label="Area"><option>LinkedIn</option><option>Agency</option><option>Automation</option><option>Study</option><option>Other / admin</option></select>
+              <button class="btn pri sm">Tell Jarvis</button>
+            </form>
+            <div class="row" id="stillRow" hidden style="margin-top:8px"><button class="btn sm ok" id="stillBtn">Still on it</button><span class="hint" id="stillTxt"></span></div>
+          </div>
+          <div id="fCur"></div>
+          <h3 style="margin-top:16px"><span>Focus log</span></h3>
+          <div id="fLog"><p class="hint">Nothing logged yet.</p></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3><span>This week</span><span class="num" id="wWeek">0h 00m</span></h3>
+        <div class="bars" id="wBars"></div>
+        <div class="row" style="margin-top:10px"><div class="stat" style="flex:1"><span>Average per working day</span><b class="num" id="wAvg">—</b></div><div class="stat" style="flex:1"><span>Longest session</span><b class="num" id="wLong">—</b></div></div>
+      </div>
+    </div>
+
+    <!-- LinkedIn CRM -->
+    <div id="wt-linkedin" hidden>
+      <div class="card">
+        <h3><span>Lead pipeline</span><span class="num" id="crmTotal"></span></h3>
+        <div class="stages" id="crmStages"></div>
+        <div class="row" style="margin-top:12px;align-items:center">
+          <input id="crmSearch" class="inp" placeholder="Search name, company, title…" aria-label="Search leads" style="flex:1 1 220px">
+          <button class="btn pri sm" id="crmImportBtn">Import leads</button>
+          <button class="btn sm" id="crmAddBtn">Add lead</button>
+          <button class="btn sm" id="crmOfferBtn">My offer</button>
+        </div>
+        <div id="crmRadar"></div>
+        <form id="offerForm" hidden style="margin-top:12px">
+          <div class="field"><label for="offerIn">What you offer and who your ideal client is (Jarvis uses this for message drafts)</label>
+            <textarea id="offerIn" rows="3" placeholder="e.g. Performance marketing agency helping DTC brands in UAE/UK scale Meta & Google ads. Ideal: founders/CMOs, $1M+ revenue."></textarea></div>
+          <button class="btn pri sm">Save offer</button>
+        </form>
+      </div>
+
+      <div class="card" id="crmImport" hidden style="margin-top:16px">
+        <h3><span>Import leads</span><button class="btn sm" id="impClose" type="button">Close</button></h3>
+        <ol class="steps"><li id="st1" class="on">Source</li><li id="st2">Review</li><li id="st3">Import</li></ol>
+        <div id="imp1">
+          <div class="field"><label for="impText">Paste a CSV, cells copied from Google Sheets/Excel, or one LinkedIn URL / name per line</label>
+            <textarea id="impText" rows="7" placeholder="Name,Title,Company,LinkedIn URL&#10;Sara Khan,Marketing Director,Bloom Foods,https://www.linkedin.com/in/sarakhan"></textarea></div>
+          <div class="field"><label for="impFile">…or upload a file (.csv, .xlsx, .xls)</label><input id="impFile" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls"></div>
+          <div class="hint">Google Sheet: select the cells and paste them above, or File → Download → CSV and upload.</div>
+          <div class="row" style="margin-top:10px"><button class="btn pri sm" id="impNext" type="button">Next: review</button><span class="hint" id="impMsg"></span></div>
+        </div>
+        <div id="imp2" hidden>
+          <div class="hint" style="margin-bottom:8px">Check that each field points at the right column.</div>
+          <div class="maprow" id="impMap"></div>
+          <div class="impcounts" id="impCounts"></div>
+          <div class="tablewrap"><table class="tbl" id="impPreview"></table></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn sm" id="impBack" type="button">Back</button>
+            <button class="btn sm" id="impClean" type="button" hidden>Clean messy list with Jarvis</button>
+            <button class="btn pri sm" id="impGo" type="button">Import</button>
+          </div>
+        </div>
+        <div id="imp3" hidden>
+          <div class="meter big"><i id="impBar" style="width:0"></i></div>
+          <div id="impDone" class="hint" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div id="crmList"></div>
+      </div>
+    </div>
+
+    <!-- Agency work -->
+    <div id="wt-agency" hidden>
+      <div class="kpis" id="agSummary"></div>
+      <div class="grid2">
+        <div class="card">
+          <h3><span>Clients</span></h3>
+          <div id="agClients"></div>
+          <form id="clientForm" class="row" style="margin-top:10px">
+            <input class="inp" id="cName" placeholder="Client name" aria-label="Client name" style="flex:2 1 140px" required>
+            <input class="inp" id="cRet" type="number" placeholder="Monthly retainer" aria-label="Monthly retainer" style="flex:1 1 110px">
+            <select id="cCur" aria-label="Currency"><option>PKR</option><option>USD</option><option>AED</option><option>GBP</option></select>
+            <button class="btn pri sm">Add client</button>
+          </form>
+        </div>
+        <div class="card">
+          <h3><span>Team</span><span class="num" id="agWeek"></span></h3>
+          <div id="agTeam"></div>
+          <form id="teamForm" class="row" style="margin-top:10px">
+            <input class="inp" id="tName" placeholder="Name" aria-label="Team member name" style="flex:1 1 120px" required>
+            <input class="inp" id="tRole" placeholder="Role" aria-label="Role" style="flex:1 1 120px">
+            <button class="btn pri sm">Add member</button>
+          </form>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3><span>Revenue log</span><span class="num" id="agRevTotal"></span></h3>
+        <form id="revForm" class="row">
+          <input class="inp" id="rDate" type="date" aria-label="Date">
+          <input class="inp" id="rAmt" type="number" placeholder="Amount" aria-label="Amount" required style="flex:1 1 100px">
+          <select id="rCur" aria-label="Currency"><option>PKR</option><option>USD</option><option>AED</option><option>GBP</option></select>
+          <input class="inp" id="rNote" placeholder="What for (client / project)" aria-label="Note" style="flex:2 1 160px">
+          <button class="btn pri sm">Log payment</button>
+        </form>
+        <div id="agRevenue" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <!-- Automation projects -->
+    <div id="wt-auto" hidden>
+      <div id="autoPrompt"></div>
+      <div class="card">
+        <h3><span>Projects</span><button class="btn pri sm" id="projAddBtn" type="button">New project</button></h3>
+        <form id="projForm" hidden class="projform">
+          <div class="row">
+            <div class="field" style="flex:2 1 200px"><label for="pName">Project name</label><input class="inp" id="pName" required></div>
+            <div class="field"><label for="pStatus">Status</label><select id="pStatus"><option>Idea</option><option selected>Building</option><option>Testing</option><option>Live</option><option>Paused</option></select></div>
+            <div class="field"><label for="pDeadline">Deadline</label><input class="inp" id="pDeadline" type="date"></div>
+          </div>
+          <div class="field"><label for="pGoal">Goal & expected result</label><input class="inp" id="pGoal" placeholder="e.g. Auto-reply to inbound leads in 2 min; saves ~6 h/week"></div>
+          <div class="row">
+            <div class="field" style="flex:1 1 200px"><label for="pTools">Tools</label><input class="inp" id="pTools" placeholder="n8n, OpenAI, Google Sheets"></div>
+            <div class="field" style="flex:2 1 240px"><label for="pNext">Next step</label><input class="inp" id="pNext" placeholder="The very next action"></div>
+          </div>
+          <input type="hidden" id="pId">
+          <div class="row"><button class="btn pri sm">Save project</button><button class="btn sm" type="button" id="projCancel">Cancel</button></div>
+        </form>
+        <div id="autoList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STUDY -->
+  <section id="v-study" hidden>
+    <div class="squote" id="q-study"></div>
+    <div class="grid2">
+      <div class="card">
+        <h3><span>New assignment</span></h3>
+        <form id="asgForm">
+          <div class="row">
+            <div class="field"><label for="aCourse">Course</label><input class="inp" id="aCourse" placeholder="e.g. Marketing Management"></div>
+            <div class="field"><label for="aDue">Due date</label><input class="inp" id="aDue" type="date"></div>
+          </div>
+          <div class="field"><label for="aTitle">Title / question</label><input class="inp" id="aTitle" required></div>
+          <div class="field"><label for="aBrief">Instructions for this assignment (paste the brief, marking criteria, anything specific)</label><textarea id="aBrief" rows="7" required></textarea></div>
+          <div class="row">
+            <div class="field"><label for="aWords">Word count</label><input class="inp" id="aWords" type="number" placeholder="1500"></div>
+            <div class="field" style="flex:2 1 220px"><label for="aMode">What Jarvis produces</label>
+              <select id="aMode"><option value="outline">Outline + research plan</option><option value="draft">Draft + teach me (explains each section)</option></select></div>
+          </div>
+          <label class="check"><input type="checkbox" id="aNote" checked> Add a one-line note that AI assisted (you can remove it before submitting)</label>
+          <div class="row" style="margin-top:10px;align-items:center"><button class="btn pri" id="aGo">Generate</button><span class="hint" id="aMsg"></span></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3><span>My assignment rules</span><span class="saved" id="rulesSaved"></span></h3>
+        <div class="field"><label for="rulesIn">Standing rules Jarvis must follow every time: format, referencing style, tone, word-count tolerance, what's not allowed</label>
+          <textarea id="rulesIn" rows="9" placeholder="- Harvard referencing&#10;- Formal academic tone, UK English&#10;- Word count within ±10%&#10;- Headings: Introduction, Discussion, Conclusion&#10;- No first person&#10;- No made-up statistics or sources"></textarea></div>
+        <button class="btn sm pri" id="rulesSave" type="button">Save rules</button>
+        <h3 style="margin-top:16px"><span>Assignments</span></h3>
+        <div id="asgList"><p class="hint">None yet.</p></div>
+      </div>
+    </div>
+    <div class="card" id="asgOut" hidden style="margin-top:16px">
+      <h3><span id="asgOutTitle"></span><span class="tag" id="asgOutMode"></span></h3>
+      <div class="doc" id="asgBody"></div>
+      <div id="asgCheck"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn pri sm" id="asgPdf" type="button">Download PDF</button>
+        <button class="btn sm" id="asgCopy" type="button">Copy text</button>
+        <button class="btn sm" id="asgClose" type="button">Close</button>
+        <span class="hint" id="asgOutMsg"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLEEP -->
+  <section id="v-sleep" hidden>
+    <div class="squote" id="q-sleep"></div>
+    <div class="grid2">
+      <div class="card">
+        <h3><span>Tonight</span><span class="num" id="slTargetTag"></span></h3>
+        <div class="hint">Recommended bedtime</div>
+        <div class="session" id="slBed">--</div>
+        <div class="hint" id="slWhy"></div>
+        <div class="row" style="margin-top:14px"><button class="btn pri" id="slBtn">Going to sleep</button><span class="hint" id="slState"></span></div>
+        <h3 style="margin-top:18px"><span>Log a night manually</span></h3>
+        <form id="slForm" class="row">
+          <div class="field"><label for="slNight">Woke up on</label><input class="inp" id="slNight" type="date"></div>
+          <div class="field"><label for="slIn">Slept at</label><input class="inp" id="slIn" type="time" required></div>
+          <div class="field"><label for="slOut">Woke at</label><input class="inp" id="slOut" type="time" required></div>
+          <div class="field" style="justify-content:flex-end"><button class="btn sm pri">Save</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3><span>Last 7 nights</span><span class="num" id="slAvg"></span></h3>
+        <div class="bars" id="slBars"></div>
+        <div class="stat" style="margin-top:10px"><span>Sleep debt this week</span><b class="num" id="slDebt">—</b></div>
+        <div class="stat"><span>Bedtime consistency</span><b class="num" id="slCons">—</b></div>
+        <p class="hint" style="margin-top:10px">Why it matters: most muscle repair and growth-hormone release happens in deep sleep. Under about 7 hours, recovery, strength and appetite control all drop, even with perfect training and protein.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DIET -->
+  <section id="v-diet" hidden>
+    <div class="grid2">
+      <div class="card">
+        <h3><span>Log a meal</span></h3>
+        <form class="ask" id="mealForm" style="margin-top:0">
+          <input id="mealIn" placeholder="e.g. 2 rotis, chicken karahi, 1 glass lassi" aria-label="What did you eat?">
+          <button class="btn pri sm" id="mealBtn">Log</button>
+        </form>
+        <div id="mealManual" hidden class="row" style="margin-top:8px">
+          <div class="field"><label for="mKcalIn">Calories</label><input id="mKcalIn" type="number" inputmode="numeric"></div>
+          <div class="field"><label for="mProtIn">Protein (g)</label><input id="mProtIn" type="number" inputmode="numeric"></div>
+        </div>
+        <div class="reply" id="mealOut"></div>
+        <h3 style="margin-top:14px"><span>Today's meals</span></h3>
+        <div id="mealList"></div>
+      </div>
+      <div class="card">
+        <h3><span>Targets</span><span class="tag">Build muscle</span></h3>
+        <div class="stat"><span>Calories</span><b class="num" id="tKcal">—</b></div>
+        <div class="stat"><span>Protein</span><b class="num" id="tProt">—</b></div>
+        <div class="stat"><span>Meal times</span><b class="num" id="tMeals">—</b></div>
+        <div class="hint" style="margin-top:8px" id="tHow"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETUP -->
+  <section id="v-setup" hidden>
+    <form id="setupForm">
+      <div class="grid2">
+        <div class="card">
+          <h3><span>Location & prayer</span></h3>
+          <div class="field"><label for="city">City</label><select id="city"></select></div>
+          <div class="row" id="customLoc" hidden>
+            <div class="field"><label for="lat">Latitude</label><input id="lat" type="number" step="any"></div>
+            <div class="field"><label for="lng">Longitude</label><input id="lng" type="number" step="any"></div>
+          </div>
+          <div class="field"><label>Minute adjustments to match your mosque (+/-)</label>
+            <div class="row" id="offsets"></div></div>
+          <h3 style="margin-top:6px"><span>Meals</span></h3>
+          <div class="field"><label for="mealTimes">Meal times (comma separated)</label><input id="mealTimes" placeholder="8:30 AM, 1:30 PM, 5:30 PM, 9:30 PM"></div>
+          <div class="field"><label for="foods">Foods you usually eat / avoid (helps Jarvis estimate)</label><input id="foods" placeholder="roti, daal, chicken, eggs; no beef"></div>
+        </div>
+        <div class="card">
+          <h3><span>Gym times</span></h3>
+          <div class="daysgrid" id="gymDays"></div>
+          <div class="hint" style="margin:6px 0 14px">Sessions are fixed Mon–Sat; Sunday is rest. Set the time you plan to train each day.</div>
+          <h3><span>Body (for your targets)</span></h3>
+          <div class="row">
+            <div class="field"><label for="height">Height (cm)</label><input id="height" type="number" inputmode="numeric"></div>
+            <div class="field"><label for="weight">Weight (kg)</label><input id="weight" type="number" step="0.1" inputmode="decimal"></div>
+          </div>
+          <div class="row">
+            <div class="field"><label for="age">Age</label><input id="age" type="number" inputmode="numeric"></div>
+            <div class="field"><label for="goalW">Goal weight (kg)</label><input id="goalW" type="number" step="0.1" inputmode="decimal"></div>
+          </div>
+          <div class="field"><label for="sleepBase">Sleep target on rest days (hours; training days get +30 min)</label><input id="sleepBase" type="number" step="0.5" min="6" max="10"></div>
+          <div class="row">
+            <div class="field"><label for="afterFajr">After Fajr I sleep again until (optional)</label><input id="afterFajr" type="time"></div>
+            <div class="field"><label for="wakeTime">Or: I wake up at (if not for Fajr)</label><input id="wakeTime" type="time"></div>
+          </div>
+          <div class="field"><label for="voiceSel">Jarvis voice</label><select id="voiceSel"></select></div>
+          <div class="row" style="align-items:center"><button class="btn pri">Save setup</button><span class="saved" id="setupSaved"></span></div>
+          <div class="hint" style="margin-top:8px">Saved privately to your account: only you can see it, on any device where you open this page in Claude.</div>
+        </div>
+      </div>
+    </form>
+  </section>
+</div>
+
+<nav class="bnav" aria-label="Sections">
+  <button data-view="home" aria-current="true">Now</button><button data-view="prayer">Prayer</button><button data-view="gym">Gym</button><button data-view="work">Work</button><button data-view="study">Study</button><button data-view="diet">Diet</button><button data-view="sleep">Sleep</button><button data-view="setup">Setup</button>
+</nav>
+
+<script src="claude-shim.js"></script>
+<script>
+/* ============================================================
+   Settings, storage
+   ============================================================ */
+const CITIES = { Lahore: [31.5204, 74.3587], Karachi: [24.8607, 67.0011], Islamabad: [33.6844, 73.0479], Rawalpindi: [33.5651, 73.0169],
+  Faisalabad: [31.4504, 73.1350], Multan: [30.1575, 71.5249], Peshawar: [34.0151, 71.5249], Quetta: [30.1798, 66.9750], Sialkot: [32.4945, 74.5229],
+  Gujranwala: [32.1877, 74.1945], Hyderabad: [25.3960, 68.3578], "Custom (enter coordinates)": null };
+const TZ = "Asia/Karachi";
+const PRAYERS = [["fajr", "Fajr"], ["dhuhr", "Zuhr"], ["asr", "Asr"], ["maghrib", "Maghrib"], ["isha", "Isha"]];
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DEFAULTS = { city: "Lahore", lat: 31.5204, lng: 74.3587, offsets: { fajr: 0, dhuhr: 0, asr: 0, maghrib: 0, isha: 0 },
+  gym: { 0: "", 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" }, meals: ["08:30", "13:30", "17:30", "21:30"], foods: "",
+  height: null, weight: null, age: null, goalW: null, voice: "", since: "", sleepBase: 8, sleepOpen: "", afterFajr: "", wakeTime: "", impTarget: 6, offer: "" };
+// Fixed weekly split from Monday; Sunday rest (0 = Sunday)
+const SESSIONS = { 1: "Push", 2: "Pull", 3: "Legs", 4: "Push", 5: "Pull", 6: "Legs", 0: null };
+
+let S = structuredClone(DEFAULTS);
+let DAYS = {};               // "2026-10-06" -> day doc
+let db = null, uid = null, sample = null;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const emptyDay = () => ({ prayers: {}, gym: { status: "", workout: "", ex: [] }, meals: [], work: [] });
+
+function local(key, val) { try { if (val === undefined) return JSON.parse(localStorage.getItem("jde." + key) || "null"); localStorage.setItem("jde." + key, JSON.stringify(val)); } catch (e) { return null; } }
+const writeQ = {};
+function persist(docId, data) {          // one write at a time per doc, last state wins
+  if (!db || !uid) { if (docId === "settings") local("settings", data); else if (docId.startsWith("day-")) { const all = local("days") || {}; all[docId.slice(4)] = data; local("days", all); } else local("doc." + docId, data); return; }
+  writeQ[docId] = data;
+  if (writeQ[docId + ":busy"]) return;
+  const run = async () => { writeQ[docId + ":busy"] = true;
+    while (writeQ[docId]) { const d = writeQ[docId]; writeQ[docId] = null;
+      try { await db.collection("data/users/" + uid).doc(docId).set(JSON.parse(JSON.stringify(d))); setSync("Synced", "live"); }
+      catch (e) { setSync("Not saved — check connection", "warn"); } }
+    writeQ[docId + ":busy"] = false; };
+  run();
+}
+const saveSettings = () => persist("settings", S);
+const saveDay = k => persist("day-" + k, DAYS[k]);
+function setSync(t, cls = "") { const el = $("#syncTag"); el.textContent = t; el.className = "tag " + cls; }
+
+/* ============================================================
+   Time helpers (everything in Asia/Karachi)
+   ============================================================ */
+const fmtParts = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23", weekday: "short" });
+function parts(d = new Date()) { const o = {}; for (const p of fmtParts.formatToParts(d)) o[p.type] = p.value; return { y: +o.year, m: +o.month, d: +o.day, h: +o.hour, mi: +o.minute, s: +o.second, wd: DOW.indexOf(o.weekday) }; }
+function tzOffsetH(d = new Date()) { const p = parts(d); return Math.round((Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi, p.s) - Math.floor(d / 1000) * 1000) / 36e5 * 4) / 4; }
+const keyOf = d => { const p = parts(d); return `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`; };
+function atLocal(y, m, d, hours) { return new Date(Date.UTC(y, m - 1, d) + (hours - tzOffsetH(new Date(Date.UTC(y, m - 1, d, 12)))) * 36e5); }
+function hmToDate(base, hm) { const [h, mi] = String(hm).split(":").map(Number); if (isNaN(h)) return null; return atLocal(base.y, base.m, base.d, h + (mi || 0) / 60); }
+const tFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit", hour12: true });
+const T = d => d ? tFmt.format(d) : "--";
+const hm12 = hm => { const [h, m] = String(hm).split(":").map(Number); if (isNaN(h)) return hm; return `${((h + 11) % 12) + 1}:${String(m || 0).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
+function parseClock(x) {                       // "8:30 PM", "8:30pm", "20:30" -> "20:30"
+  const m = String(x).trim().match(/^(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?$/i); if (!m) return null;
+  let h = +m[1]; const mi = +(m[2] || 0); const ap = m[3] ? m[3][0].toLowerCase() : null;
+  if (ap === "p" && h < 12) h += 12; if (ap === "a" && h === 12) h = 0; if (h > 23 || mi > 59) return null;
+  return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`; }
+const dur = ms => { ms = Math.max(0, ms); const m = Math.round(ms / 6e4); return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m` : `${m} min`; };
+const dayShift = (k, n) => { const [y, m, d] = k.split("-").map(Number); return keyOf(new Date(Date.UTC(y, m - 1, d + n, 12))); };
+
+/* ============================================================
+   Prayer times (PrayTimes algorithm; Karachi 18°/18°, Hanafi Asr)
+   ============================================================ */
+const dtr = d => d * Math.PI / 180, rtd = r => r * 180 / Math.PI;
+const sn = d => Math.sin(dtr(d)), cs = d => Math.cos(dtr(d)), tn = d => Math.tan(dtr(d));
+const asn = x => rtd(Math.asin(x)), acs = x => rtd(Math.acos(x)), at2 = (y, x) => rtd(Math.atan2(y, x)), acot = x => rtd(Math.atan(1 / x));
+const fixm = (a, b) => { a = a - b * Math.floor(a / b); return a < 0 ? a + b : a; }, fixA = a => fixm(a, 360), fixH = a => fixm(a, 24);
+function julian(y, m, d) { if (m <= 2) { y -= 1; m += 12; } const A = Math.floor(y / 100), B = 2 - A + Math.floor(A / 4); return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + B - 1524.5; }
+function sunPos(jd) { const D = jd - 2451545, g = fixA(357.529 + .98560028 * D), q = fixA(280.459 + .98564736 * D), L = fixA(q + 1.915 * sn(g) + .02 * sn(2 * g)), e = 23.439 - .00000036 * D;
+  return { decl: asn(sn(e) * sn(L)), eqt: q / 15 - fixH(at2(cs(e) * sn(L), cs(L)) / 15) }; }
+function prayerHours(y, m, d, lat, lng, tz) {
+  const jd = julian(y, m, d) - lng / (15 * 24);
+  const mid = t => fixH(12 - sunPos(jd + t).eqt);
+  const ang = (a, t, ccw) => { const dec = sunPos(jd + t).decl, n = mid(t), x = acs((-sn(a) - sn(dec) * sn(lat)) / (cs(dec) * cs(lat))) / 15; return n + (ccw ? -x : x); };
+  const asr = t => { const dec = sunPos(jd + t).decl; return ang(-acot(2 + tn(Math.abs(lat - dec))), t); };
+  let t = { fajr: 5, sunrise: 6, dhuhr: 12, asr: 13, maghrib: 18, isha: 18 };
+  for (let i = 0; i < 2; i++) { const p = {}; for (const k in t) p[k] = t[k] / 24;
+    t = { fajr: ang(18, p.fajr, true), sunrise: ang(.833, p.sunrise, true), dhuhr: mid(p.dhuhr), asr: asr(p.asr), maghrib: ang(.833, p.maghrib), isha: ang(18, p.isha) }; }
+  const out = {}; for (const k in t) out[k] = t[k] + tz - lng / 15; out.dhuhr += 1 / 60; return out;
+}
+function prayersFor(k) {
+  const [y, m, d] = k.split("-").map(Number); const tz = tzOffsetH(new Date(Date.UTC(y, m - 1, d, 12)));
+  const h = prayerHours(y, m, d, +S.lat, +S.lng, tz); const res = {};
+  for (const n in h) res[n] = new Date(atLocal(y, m, d, h[n]).getTime() + ((S.offsets || {})[n] || 0) * 6e4);
+  return res;
+}
+
+/* ============================================================
+   Day model
+   ============================================================ */
+function day(k) { if (!DAYS[k]) DAYS[k] = emptyDay(); const D = DAYS[k]; D.prayers ||= {}; D.gym ||= { status: "", workout: "", ex: [] }; D.meals ||= []; D.work ||= []; return D; }
+function windows(k) {
+  const p = prayersFor(k), nx = prayersFor(dayShift(k, 1));
+  return { fajr: [p.fajr, p.sunrise], dhuhr: [p.dhuhr, p.asr], asr: [p.asr, p.maghrib], maghrib: [p.maghrib, p.isha], isha: [p.isha, nx.fajr], sunrise: p.sunrise };
+}
+function gymPlan(k) {
+  const [y, m, d] = k.split("-").map(Number); const wd = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+  const session = SESSIONS[wd]; if (!session) return null;
+  const hm = (S.gym || {})[wd];
+  return { at: hm ? hmToDate({ y, m, d }, hm) : null, workout: session };
+}
+function totals(k) { return day(k).meals.reduce((a, x) => ({ kcal: a.kcal + (+x.kcal || 0), protein: a.protein + (+x.protein || 0) }), { kcal: 0, protein: 0 }); }
+function targets() {
+  const w = +S.weight, h = +S.height, a = +S.age; if (!w || !h || !a) return null;
+  const bmr = 10 * w + 6.25 * h - 5 * a + 5;           // Mifflin-St Jeor (male)
+  const kcal = Math.round((bmr * 1.55 + 300) / 50) * 50; // moderate activity + lean-bulk surplus
+  const protein = Math.round(2 * Math.max(w, +S.goalW || 0) * 0.95 / 5) * 5;
+  return { kcal, protein, bmr: Math.round(bmr) };
+}
+// Work sessions: stored on the day you checked in; an open session can run past midnight
+function openSession() { const k = keyOf(new Date());
+  for (const dk of [k, dayShift(k, -1)]) { const w = (DAYS[dk] && DAYS[dk].work || []).find(x => !x.out); if (w) return { k: dk, w }; } return null; }
+const sessMs = (w, now = new Date()) => Math.max(0, (w.out ? new Date(w.out) : now) - new Date(w.in));
+function workMs(k, now = new Date()) { return ((DAYS[k] && DAYS[k].work) || []).reduce((a, w) => a + sessMs(w, now), 0); }
+const hms = ms => { const t = Math.floor(ms / 1000); return `${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; };
+const hm2 = ms => { const m = Math.floor(ms / 6e4); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
+function weekKeys(k) { const wd = new Date(k + "T12:00Z").getUTCDay(); const mon = dayShift(k, -((wd + 6) % 7)); return [0, 1, 2, 3, 4, 5, 6].map(i => dayShift(mon, i)); }
+
+// "Never miss twice": consecutive scheduled gym days missed before today
+function gymMissStreak(k) {
+  let n = 0;
+  if (!S.since) return 0;                                   // only count days since Malik started using Jarvis
+  for (let i = 1; i <= 14; i++) { const dk = dayShift(k, -i); if (dk < S.since) break; const plan = gymPlan(dk); if (!plan) continue;
+    const st = (DAYS[dk] && DAYS[dk].gym && DAYS[dk].gym.status) || ""; if (st === "done" || st === "late") break; n++; }
+  return n;
+}
+function prayerStreak(k) { let n = 0; for (let i = 1; i <= 60; i++) { const D = DAYS[dayShift(k, -i)]; if (!D || !PRAYERS.every(([p]) => D.prayers[p] === "ontime")) break; n++; } return n; }
+
+/* ============================================================
+   Jarvis voice: lines, quotes, chime + speech
+   ============================================================ */
+const QUOTES = {
+  prayer: ["Five appointments a day that no client can reschedule, Malik. Keep every one.", "The day bends around salah, not the other way round.",
+    "Fajr on time sets the tone. Everything after is momentum.", "Busy is not a reason to delay. It's exactly the reason not to.",
+    "Stand for prayer like it's the most important meeting of the day, because it is.", "Your calendar can have gaps. Your salah shouldn't.",
+    "Discipline starts at the adhan. I'll handle the rest of the noise."],
+  gym: ["Push, pull, legs. Simple plan. The hard part is showing up, so show up.", "The bar doesn't negotiate, Malik. Neither should you.",
+    "Strength is built in sessions nobody claps for.", "Today's effort is next month's confidence.", "Skipping is easy. That's why it's worth nothing.",
+    "Muscle is consistency made visible.", "The suit is optional, Malik. You are the upgrade."],
+  work: ["Clock's running, Malik. Make every hour defensible.", "One task finished beats five tasks touched.", "The agency runs at the standard you set today.",
+    "Clients pay for results, not for busy. Ship something.", "Deep work now, messages later. I'll watch the inbox.",
+    "If it matters, schedule it. If it's scheduled, finish it.", "Momentum is expensive to rebuild. Don't trade it for a notification."],
+  study: ["An hour of focused study beats a night of panic, Malik.", "Deadlines are plans someone else made for you. Make yours first.",
+    "Read it once properly. It saves reading it three times badly.", "Your degree is a project. Treat it like your best client.",
+    "Small daily progress compounds into a grade nobody can argue with.", "Phone face down. Forty minutes. Then we talk.",
+    "Understanding beats memorising. Ask why until it clicks."],
+};
+QUOTES.sleep = ["Muscle is built in bed, Malik. The gym only sends the order.", "Lights out on time is a training decision.", "Eight hours tonight is tomorrow's strength.",
+  "Recovery is not laziness. It's where the work pays off.", "Screens off. Fajr is coming either way; meet it rested.", "Sleep debt always collects, usually from your focus first.", "A tired mind negotiates. A rested one executes."];
+const LABELS = { prayer: "Prayer", gym: "Gym", work: "Work", study: "Study", sleep: "Sleep" };
+function quoteOf(cat) { const k = keyOf(new Date()); const n = Math.floor(Date.UTC(...k.split("-").map((v, i) => i === 1 ? v - 1 : +v)) / 864e5);
+  const list = QUOTES[cat]; return list[(n + cat.length) % list.length]; }
+function renderQuotes(ctx) {
+  for (const c of ["prayer", "gym", "work", "study", "sleep"]) { const el = $("#q-" + c); if (el) el.innerHTML = `<b>${LABELS[c]}</b>“${esc(quoteOf(c))}”`; }
+  $("#quote").textContent = `${LABELS[ctx]} · “${quoteOf(ctx)}”`;
+}
+
+let audioCtx = null, voices = [];
+function chime(kind = "prayer") {
+  if (!audioCtx) return; const t0 = audioCtx.currentTime;
+  const notes = kind === "prayer" ? [659.3, 880] : kind === "urgent" ? [880, 660, 880] : [587.3, 784];
+  notes.forEach((f, i) => { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type = "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t0 + i * .22); g.gain.linearRampToValueAtTime(.18, t0 + i * .22 + .02); g.gain.exponentialRampToValueAtTime(.001, t0 + i * .22 + .6);
+    o.connect(g).connect(audioCtx.destination); o.start(t0 + i * .22); o.stop(t0 + i * .22 + .65); });
+}
+function loadVoices() {
+  try { voices = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); } catch (e) { voices = []; }
+  const sel = $("#voiceSel"); sel.innerHTML = '<option value="">Automatic (British male if available)</option>' + voices.map(v => `<option>${esc(v.name)}</option>`).join(""); sel.value = S.voice || "";
+}
+function pickVoice() { return voices.find(v => v.name === S.voice) || voices.find(v => /UK English Male|Daniel|Arthur|George|Ryan/i.test(v.name)) || voices.find(v => v.lang === "en-GB") || null; }
+function speak(text) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); const v = pickVoice(); if (v) u.voice = v; u.rate = 1.0; u.pitch = .95; speechSynthesis.speak(u); } catch (e) {} }
+function announce(text, kind) { if (!audioCtx) return; chime(kind); setTimeout(() => speak(text), kind === "urgent" ? 800 : 600); }
+$("#armBtn").onclick = () => {
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) {}
+  $("#armBtn").textContent = "Sound on"; $("#armBtn").classList.add("on"); announce("Systems online, Malik. I'll keep watch.", "info");
+};
+if ("speechSynthesis" in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+
+/* ============================================================
+   NOW engine: the single most important thing right now
+   ============================================================ */
+function computeNow() {
+  const now = new Date(), k = keyOf(now), D = day(k), W = windows(k);
+  const yk = dayShift(k, -1), YW = windows(yk);
+  // still inside yesterday's Isha window (after midnight)?
+  if (now < W.fajr[0] && !day(yk).prayers.isha) return prayerCard("isha", YW.isha, now, yk);
+  for (const [p] of PRAYERS) { const [s, e] = W[p]; if (now >= s && now < e && !D.prayers[p]) return prayerCard(p, [s, e], now, k); }
+  // heads-up: within 10 min before a prayer
+  for (const [p, name] of PRAYERS) { const s = W[p][0]; if (s - now > 0 && s - now <= 10 * 6e4)
+    return { level: "tense", ctx: "prayer", eyebrow: `${name} in ${dur(s - now)}`, title: "Wrap up. Prayer next.", say: "Finish the sentence you're on, Malik, then step away. I'll hold everything else.", total: 10 * 6e4, left: s - now, ringLbl: "TO ADHAN", acts: [] }; }
+  // gym
+  const g = gymPlan(k);
+  if (g && g.at && !D.gym.status && now >= g.at - 15 * 6e4 && now < g.at + 120 * 6e4) {
+    const miss = gymMissStreak(k), late = now - g.at;
+    const say = miss >= 2 ? "Malik, gal sun. Do din ho gaye ne. Aaj koi bahana nahi — utho te gym chalo." :
+                miss === 1 ? "You missed the last session. We don't miss twice. Bag, shoes, go." :
+                late > 20 * 6e4 ? `You're ${dur(late)} behind. A shorter session beats no session.` : `${g.workout} session today. Warm up properly, then make it count.`;
+    return { level: miss >= 1 || late > 20 * 6e4 ? "tense" : "", ctx: "gym", eyebrow: late < 0 ? `Gym in ${dur(-late)}` : "Gym window open", title: `${g.workout} day`, say,
+             total: 120 * 6e4, left: g.at + 120 * 6e4 - now, ringLbl: "WINDOW", acts: [["Start session", () => go("gym"), "pri"], ["Done", () => setGym(k, "done"), "ok"]] };
+  }
+  // meals due (within 45 min after a meal time, nothing logged since)
+  const p = parts(now);
+  for (const hm of S.meals || []) { const at = hmToDate(p, hm); if (!at) continue; const since = now - at; const hmL = hm12(hm);
+    if (since >= 0 && since < 45 * 6e4 && !D.meals.some(m => new Date(m.at) >= new Date(at - 60 * 6e4))) {
+      const tg = targets(), tt = totals(k); const need = tg ? Math.max(0, tg.protein - tt.protein) : null;
+      return { level: "", eyebrow: `Meal · ${hmL}`, title: "Time to eat", say: need ? `${need} g protein still to go today. Make this one count.` : "Eat on time; the gym work depends on it.",
+               total: 45 * 6e4, left: 45 * 6e4 - since, ringLbl: "WINDOW", acts: [["Log meal", () => { go("diet"); $("#mealIn").focus(); }, "pri"]] }; } }
+  // otherwise: next prayer countdown
+  const upcoming = PRAYERS.map(([pp]) => [pp, W[pp][0]]).filter(([, s]) => s > now);
+  const [np, ns] = upcoming[0] || ["fajr", windows(dayShift(k, 1)).fajr[0]];
+  const name = PRAYERS.find(x => x[0] === np)[1];
+  const prev = [...PRAYERS].reverse().map(([pp]) => W[pp][0]).find(s => s <= now) || new Date(now - 6 * 36e5);
+  // sleeping / bedtime
+  if (S.sleepOpen) { const ms = now - new Date(S.sleepOpen);
+    return { level: "", ctx: "sleep", eyebrow: `Sleeping since ${T(new Date(S.sleepOpen))}`, title: `Rest · ${hm2(ms)}`, say: "Tap I'm awake when you get up so I can log your night.", total: 9 * 36e5, left: Math.max(0, 9 * 36e5 - ms), ringLbl: "SLEPT", acts: [["I'm awake", toggleSleep, "ok"]] }; }
+  { const tk = tonightKey(now), bt = bedtimeFor(tk), toBed = bt.bed - now;
+    if (toBed <= 45 * 6e4 && toBed > -3 * 36e5 && !nightOf(dayShift(tk, 1))) {
+      const late = toBed < 0;
+      return { level: late ? "tense" : "", ctx: "sleep", eyebrow: late ? `Bedtime was ${T(bt.bed)}` : `Bedtime at ${T(bt.bed)}`, title: late ? "Lights out, Malik" : "Wind down",
+        say: late ? `${dur(-toBed)} past bedtime. Every hour now comes out of recovery; target is ${bt.target} h before Fajr.` : `Target ${bt.target} h of sleep, up at ${T(bt.wake)}. Screens off soon; muscle is built tonight.`,
+        total: 45 * 6e4, left: Math.max(0, toBed), ringLbl: "TO BED", acts: [["Going to sleep", toggleSleep, "pri"]] }; } }
+  const fs = focusState();
+  if (fs && fs.need) return { level: "tense", ctx: "work", eyebrow: `Slot ${fs.slot} · ${T(fs.slotStart)}–${T(fs.slotEnd)}`, title: fs.need === "slot" ? "What are you working on?" : `Still on it, Malik?`,
+    say: fs.need === "slot" ? "New slot. Name the one important thing you'll finish in these two hours." : `Last update was “${fs.last.text}” at ${T(new Date(fs.last.at))}. Confirm or tell me what changed.`,
+    total: SLOT, left: fs.slotEnd - now, ringLbl: "SLOT LEFT", acts: [["Tell Jarvis", () => { go("work"); setWT("focus"); $("#focusIn").focus(); }, "pri"]].concat(fs.need === "idle" ? [["Still on it", () => submitFocus("", "", true), "ok"]] : []) };
+  if (!openSession() && projectAskDue() && parts(now).h >= 9 && parts(now).h < 22)
+    return { level: "", ctx: "work", eyebrow: "Automation", title: "No project running", say: "It's been two days without an active automation project. What are we building next, Malik?",
+      total: 1, left: 1, ringLbl: "", acts: [["Start a project", () => { go("work"); setWT("auto"); openProjForm(); }, "pri"], ["Ask in 2 days", () => { PJ.lastAsk = new Date().toISOString(); savePJ(); renderAll(); }, ""]] };
+  const ws = openSession();
+  if (ws) return { level: "", ctx: "work", eyebrow: `Checked in · since ${T(new Date(ws.w.in))}`, title: `Working · ${hm2(sessMs(ws.w))}`, say: `${fs && fs.last ? `Focus: ${fs.last.text}. ` : ""}Important work today ${hm2(focusTotals(k).imp)} of ${S.impTarget || 6}h. ${name} at ${T(ns)}.`,
+                   total: ns - prev, left: ns - now, ringLbl: `TO ${name.toUpperCase()}`, acts: [["Check out", toggleWork, ""]] };
+  return { level: "", eyebrow: "All clear", title: `${name} at ${T(ns)}`, say: nextHint(k, now), total: ns - prev, left: ns - now, ringLbl: `TO ${name.toUpperCase()}`, acts: [["Check in to work", toggleWork, "pri"]] };
+}
+function prayerCard(p, [s, e], now, k) {
+  const name = PRAYERS.find(x => x[0] === p)[1], left = e - now, total = e - s;
+  const crit = left < 20 * 6e4, tense = left < total * .35 || crit;
+  const say = crit ? `Malik — ${name} ends in ${dur(left)}. Everything else can wait. Go now.` :
+              tense ? `${name} window is closing: ${dur(left)} left. Pray now and I'll have your next task ready.` :
+              `${name} has started. Pray while it's early; I'll keep track of the rest.`;
+  return { level: crit ? "crit" : tense ? "tense" : "", ctx: "prayer", eyebrow: `${name} · until ${T(e)}`, title: `Pray ${name}`, say, total, left, ringLbl: "WINDOW LEFT",
+           acts: [["Prayed on time", () => setPrayer(k, p, "ontime"), "ok"], ["Prayed late", () => setPrayer(k, p, "late"), ""]] };
+}
+function nextHint(k, now) {
+  const g = gymPlan(k), D = day(k);
+  if (g && g.at && !D.gym.status && g.at > now) return `Gym at ${T(g.at)}: ${g.workout} session. Nothing urgent before that.`;
+  const nm = (S.meals || []).map(hm => hmToDate(parts(now), hm)).filter(x => x && x > now)[0];
+  if (nm) return `Next meal at ${T(nm)}. Clear runway for focused work until then.`;
+  return "Nothing pressing. Good time for deep work.";
+}
+function renderNow() {
+  const n = computeNow(), card = $("#nowCard");
+  card.className = "now " + (n.level || "");
+  $("#nowEyebrow").textContent = n.eyebrow; $("#nowTitle").textContent = n.title; $("#nowSay").textContent = n.say;
+  const frac = Math.max(0, Math.min(1, n.left / (n.total || 1)));
+  $("#ringFg").style.strokeDashoffset = String(465 * (1 - frac));
+  const m = Math.max(0, Math.round(n.left / 6e4)); $("#ringBig").textContent = m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}` : `${m}m`;
+  $("#ringLbl").textContent = n.ringLbl;
+  const sig = n.title + n.acts.map(a => a[0]).join();
+  if (card.dataset.sig !== sig) { card.dataset.sig = sig; $("#nowActs").innerHTML = "";
+    n.acts.forEach(([label, fn, cls]) => { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = label; b.onclick = fn; $("#nowActs").appendChild(b); }); }
+  renderQuotes(n.ctx || (openSession() ? "work" : "study"));
+  return n;
+}
+
+/* ============================================================
+   Alerts: 10 min before + at adhan, gym, meals (while page is open)
+   ============================================================ */
+const fired = new Set();
+function checkAlerts() {
+  const now = new Date(), k = keyOf(now), W = windows(k), D = day(k);
+  const fire = (id, text, kind, bannerHtml) => { if (fired.has(id)) return; fired.add(id); announce(text, kind); showBanner(bannerHtml || esc(text)); };
+  for (const [p, name] of PRAYERS) { const s = W[p][0], diff = s - now;
+    if (diff <= 10 * 6e4 && diff > 9 * 6e4) fire(`${k}-${p}-pre`, `Malik, ${name} in ten minutes. Start wrapping up.`, "prayer");
+    if (diff <= 0 && diff > -2 * 6e4 && !D.prayers[p]) fire(`${k}-${p}-adhan`, `It's time for ${name}, Malik.`, "prayer", `<b>${name}</b> has started. Mark it once you've prayed.`);
+    const e = W[p][1], left = e - now; if (!D.prayers[p] && left <= 20 * 6e4 && left > 19 * 6e4) fire(`${k}-${p}-end`, `${name} ends in twenty minutes, Malik. Go now.`, "urgent"); }
+  const g = gymPlan(k);
+  if (g && g.at && !D.gym.status) { const diff = g.at - now;
+    if (diff <= 10 * 6e4 && diff > 9 * 6e4) fire(`${k}-gym-pre`, `${g.workout} session in ten minutes, Malik. Get your bag.`, "info");
+    if (diff <= -30 * 6e4 && diff > -31 * 6e4) fire(`${k}-gym-late`, gymMissStreak(k) >= 1 ? "Malik, gal sun. Aaj miss nahi karna. Gym chalo." : "Thirty minutes past gym time. Still time for a solid session.", "urgent"); }
+  for (const hm of S.meals || []) { const at = hmToDate(parts(now), hm); if (at && now - at >= 0 && now - at < 6e4) fire(`${k}-meal-${hm}`, "Meal time, Malik. Fuel the work.", "info"); }
+  const fs = focusState();
+  if (fs && fs.need === "slot") fire(`${fs.o.w.in}-slot-${fs.slot}`, fs.slot === 1 ? "Clock's running, Malik. What are we working on first?" : `Slot ${fs.slot}, Malik. What's the focus for the next two hours?`, "info", `<b>Slot ${fs.slot}</b>: tell Jarvis what you're working on.`);
+  if (fs && fs.need === "idle") fire(`${fs.o.w.in}-idle-${Math.floor((now - new Date(fs.last.at)) / IDLE)}`, `Malik, still on ${fs.last.text.split(" ").slice(0, 6).join(" ")}?`, "info", `Still on “${esc(fs.last.text)}”?`);
+  if (!S.sleepOpen) { const tk = tonightKey(now), bt = bedtimeFor(tk), d = bt.bed - now; if (d <= 30 * 6e4 && d > 29 * 6e4) fire(`${tk}-bed`, `Malik, lights out in thirty minutes. Muscle is built while you sleep.`, "info"); }
+  if (projectAskDue() && parts(now).h >= 10 && parts(now).h < 21) fire(`${k}-proj`, "Malik, no automation project is running. What are we building next?", "info");
+}
+function showBanner(html) {
+  const box = $("#alertBox"); const el = document.createElement("div"); el.className = "alert";
+  el.innerHTML = `<div class="t">${html}</div><button class="btn sm">Dismiss</button>`; el.querySelector("button").onclick = () => el.remove();
+  box.prepend(el); while (box.children.length > 2) box.lastChild.remove();
+}
+
+/* ============================================================
+   Actions
+   ============================================================ */
+function setPrayer(k, p, v) { const D = day(k); D.prayers[p] = D.prayers[p] === v ? undefined : v; if (!D.prayers[p]) delete D.prayers[p]; saveDay(k); renderAll();
+  if (D.prayers[p] === "ontime") speakIf("Noted. Well done, Malik."); }
+function setGym(k, st) { const D = day(k), g = gymPlan(k);
+  D.gym.status = D.gym.status === st ? "" : st; D.gym.workout = g ? g.workout : "Rest";
+  saveDay(k); renderAll(); if (D.gym.status === "done") speakIf(`${D.gym.workout} session logged. Protein next, Malik.`); }
+function speakIf(t) { if (audioCtx) speak(t); }
+function toggleWork() {
+  const o = openSession();
+  if (o) { o.w.out = new Date().toISOString(); saveDay(o.k); speakIf(`Checked out after ${hm2(sessMs(o.w)).replace("h ", " hours ").replace("m", " minutes")}. Good work, Malik.`); }
+  else { const k = keyOf(new Date()); day(k).work.push({ in: new Date().toISOString() }); saveDay(k); speakIf("Checked in. Clock is running, Malik."); }
+  renderAll(); tick();
+}
+$("#checkBtn").onclick = toggleWork; $("#wBtn").onclick = toggleWork;
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+function renderTimeline(k) {
+  const W = windows(k), D = day(k), now = new Date(), items = [];
+  PRAYERS.forEach(([p, name]) => items.push({ at: W[p][0], nm: name, st: D.prayers[p] ? { ontime: "✓ on time", late: "late", qaza: "qaza" }[D.prayers[p]] : (now > W[p][1] ? "not logged" : ""),
+    cls: D.prayers[p] === "ontime" ? "done" : D.prayers[p] === "qaza" || (!D.prayers[p] && now > W[p][1]) ? "miss" : D.prayers[p] ? "done" : (now >= W[p][0] && now < W[p][1] ? "cur" : "") }));
+  items.push({ at: W.sunrise, nm: "Sunrise", st: "", cls: "", minor: true });
+  const g = gymPlan(k); if (g) items.push({ at: g.at || W.sunrise, anytime: !g.at, nm: `Gym · ${g.workout}`, st: D.gym.status ? { done: "✓ done", late: "late", missed: "missed" }[D.gym.status] : "", cls: D.gym.status === "done" || D.gym.status === "late" ? "done" : D.gym.status === "missed" ? "miss" : "" });
+  const p = parts(now); (S.meals || []).forEach((hm, i) => { const at = hmToDate(p, hm); if (at) items.push({ at, nm: `Meal ${i + 1}`, st: "", cls: "" }); });
+  D.work.forEach(w => { items.push({ at: new Date(w.in), nm: "Work session", st: w.out ? `${hm2(sessMs(w))} · out ${T(new Date(w.out))}` : `working ${hm2(sessMs(w))}`, cls: w.out ? "done" : "cur" }); });
+  items.sort((a, b) => a.at - b.at);
+  $("#timeline").innerHTML = items.map(i => `<li class="${i.cls}"><span class="tm">${i.anytime ? "Any time" : T(i.at)}</span><span class="dot"></span><span class="nm" ${i.minor ? 'style="color:var(--dim)"' : ""}>${esc(i.nm)}</span><span class="st">${esc(i.st)}</span></li>`).join("");
+}
+function renderStatus(k) {
+  const D = day(k), tg = targets(), tt = totals(k);
+  $("#sPray").textContent = `${PRAYERS.filter(([p]) => D.prayers[p] === "ontime").length} / 5`;
+  const g = gymPlan(k); $("#sGym").textContent = D.gym.status ? `${D.gym.workout} · ${D.gym.status}` : g ? `${g.workout}${g.at ? " at " + T(g.at) : ""}` : "Rest day";
+  $("#sProt").textContent = `${Math.round(tt.protein)} / ${tg ? tg.protein : "?"} g`; $("#sKcal").textContent = `${Math.round(tt.kcal)} / ${tg ? tg.kcal : "?"}`;
+  $("#mProt i").style.width = tg ? Math.min(100, tt.protein / tg.protein * 100) + "%" : "0"; $("#mProt").classList.toggle("ok", !!tg && tt.protein >= tg.protein);
+  $("#mKcal i").style.width = tg ? Math.min(100, tt.kcal / tg.kcal * 100) + "%" : "0"; $("#mKcal").classList.toggle("ok", !!tg && tt.kcal >= tg.kcal);
+  const o = openSession(); $("#sWork").textContent = o ? `Working · ${hm2(sessMs(o.w))} (today ${hm2(workMs(k))})` : workMs(k) ? `${hm2(workMs(k))} today` : "Not checked in";
+}
+function renderPrayer(k) {
+  const W = windows(k), D = day(k), now = new Date();
+  $("#pCity").textContent = S.city.startsWith("Custom") ? `${(+S.lat).toFixed(2)}, ${(+S.lng).toFixed(2)}` : S.city;
+  $("#prayerRows").innerHTML = PRAYERS.map(([p, name]) => { const [s, e] = W[p]; const v = D.prayers[p] || "";
+    return `<div class="prow"><span class="pn">${name}</span><span class="pt">${T(s)}</span><div class="seg" role="group" aria-label="${name}">
+      ${[["ontime", "On time"], ["late", "Late"], ["qaza", "Qaza"]].map(([val, lab]) => `<button data-p="${p}" data-v="${val}" aria-pressed="${v === val}" ${now < s ? "disabled" : ""}>${lab}</button>`).join("")}</div></div>`; }).join("");
+  $("#prayerRows").querySelectorAll("button[data-p]").forEach(b => b.onclick = () => setPrayer(k, b.dataset.p, b.dataset.v));
+  let html = '<span></span>' + PRAYERS.map(([, n]) => `<span class="d" style="text-align:center">${n.slice(0, 3)}</span>`).join("");
+  for (let i = 6; i >= 0; i--) { const dk = dayShift(k, -i), DD = DAYS[dk];
+    html += `<span class="d">${i === 0 ? "Today" : DOW[new Date(dk + "T12:00Z").getUTCDay()]}</span>` + PRAYERS.map(([p]) => `<span class="c ${DD && DD.prayers ? DD.prayers[p] || "" : ""}" title="${dk} ${p}"></span>`).join(""); }
+  $("#prayerWeek").innerHTML = html;
+  const st = prayerStreak(k); $("#pStreak").textContent = st ? `${st}-day streak` : "";
+}
+function renderGym(k) {
+  const D = day(k), g = gymPlan(k);
+  $("#gymTitle").textContent = "Today's session"; $("#gymTime").textContent = g && g.at ? T(g.at) : g ? "time not set" : "";
+  $("#gymBody").innerHTML = g
+    ? `<div class="session">${g.workout.toUpperCase()}</div><div class="hint">${g.at ? `Planned for ${T(g.at)}` : "Set today's time in Setup to get gym alerts."}</div>
+       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">${[["done", "Done on time", "ok"], ["late", "Done late", ""], ["missed", "Missed", ""]].map(([v, l, c]) => `<button class="btn sm ${c} ${D.gym.status === v ? "on" : ""}" data-g="${v}">${D.gym.status === v ? "✓ " : ""}${l}</button>`).join("")}</div>`
+    : `<div class="session rest">REST</div><div class="hint">Sunday is recovery. Eat your protein and sleep on time.</div>`;
+  $("#gymBody").querySelectorAll("[data-g]").forEach(b => b.onclick = () => setGym(k, b.dataset.g));
+  const rows = weekKeys(k).map(dk => { const gp = gymPlan(dk), st = DAYS[dk] && DAYS[dk].gym ? DAYS[dk].gym.status : "";
+    const label = dk === k ? "Today" : DOW[new Date(dk + "T12:00Z").getUTCDay()];
+    const state = !gp ? "Rest" : st ? { done: "✓ done", late: "done late", missed: "missed" }[st] : dk < k && S.since && dk >= S.since ? "not logged" : dk === k ? "planned" : "";
+    return `<div class="stat"><span>${label}</span><b>${gp ? gp.workout : ""}${gp && state ? " · " : ""}${state}</b></div>`; }).join("");
+  const miss = gymMissStreak(k); $("#gymWeek").innerHTML = rows + (miss ? `<p class="hint" style="color:var(--warn)">${miss} session(s) missed in a row. Rule: never miss twice.</p>` : "");
+}
+function renderWork(k) {
+  const now = new Date(), o = openSession(), D = day(k);
+  $("#wState").textContent = o ? "Checked in" : "Not checked in"; $("#wSince").textContent = o ? `since ${T(new Date(o.w.in))}` : "";
+  $("#wBtn").textContent = o ? "Check out" : "Check in"; $("#wBtn").className = o ? "btn" : "btn pri";
+  $("#wSub").textContent = o ? "Counting live. Check out when you stop." : "Tap Check in when you start work. Jarvis counts until you check out.";
+  $("#wToday").textContent = hm2(workMs(k, now));
+  $("#wList").innerHTML = D.work.length ? D.work.map((w, i) => `<div class="wsess"><span>${T(new Date(w.in))} → ${w.out ? T(new Date(w.out)) : "now"}</span><span class="d">${hm2(sessMs(w, now))}</span><button class="x" data-wdel="${i}" aria-label="Delete session">✕</button></div>`).join("") : '<p class="hint">No sessions today.</p>';
+  $("#wList").querySelectorAll("[data-wdel]").forEach(b => b.onclick = () => { if (b.dataset.armed) { day(k).work.splice(+b.dataset.wdel, 1); saveDay(k); renderAll(); } else { b.dataset.armed = 1; b.textContent = "Delete?"; } });
+  const wk = weekKeys(k), vals = wk.map(dk => workMs(dk, now)), max = Math.max(...vals, 8 * 36e5);
+  $("#wWeek").textContent = hm2(vals.reduce((a, b) => a + b, 0));
+  $("#wBars").innerHTML = wk.map((dk, i) => `<div class="${dk === k ? "today" : ""}" title="${hm2(vals[i])}"><span>${vals[i] ? (vals[i] / 36e5).toFixed(1) : ""}</span><i style="height:${vals[i] / max * 80}%"></i><span>${DOW[new Date(dk + "T12:00Z").getUTCDay()]}</span></div>`).join("");
+  const worked = vals.filter(v => v > 0); $("#wAvg").textContent = worked.length ? hm2(worked.reduce((a, b) => a + b, 0) / worked.length) : "—";
+  const longest = Math.max(0, ...wk.flatMap(dk => ((DAYS[dk] && DAYS[dk].work) || []).map(w => sessMs(w, now)))); $("#wLong").textContent = longest ? hm2(longest) : "—";
+}
+function renderDiet(k) {
+  const D = day(k), tg = targets();
+  $("#mealList").innerHTML = D.meals.length ? D.meals.map((m, i) => `<div class="meal"><span class="tm">${T(new Date(m.at))}</span><span>${esc(m.text)}${m.note ? `<br><span class="hint">${esc(m.note)}</span>` : ""}</span><span class="mc">${Math.round(m.kcal)} kcal · ${Math.round(m.protein)} g <button class="x" data-del="${i}" aria-label="Remove">✕</button></span></div>`).join("")
+    : '<p class="hint">Nothing logged yet today.</p>';
+  $("#mealList").querySelectorAll("[data-del]").forEach(b => b.onclick = () => { day(k).meals.splice(+b.dataset.del, 1); saveDay(k); renderAll(); });
+  $("#tKcal").textContent = tg ? `${tg.kcal} kcal / day` : "Add height, weight, age in Setup";
+  $("#tProt").textContent = tg ? `${tg.protein} g / day` : "—"; $("#tMeals").textContent = (S.meals || []).map(hm12).join(" · ") || "—";
+  $("#tHow").textContent = tg ? `Maintenance ≈ ${Math.round(tg.bmr * 1.55)} kcal (BMR ${tg.bmr} × 1.55 for training 3–5×/week) + 300 kcal lean-bulk surplus. Protein ≈ 1.9 g per kg. A starting point — adjust after 2–3 weeks of weigh-ins.` : "";
+}
+function tick() {
+  const o = openSession(), ms = o ? sessMs(o.w) : 0;
+  $("#checkBtn").textContent = o ? `Check out · ${hms(ms)}` : "Check in"; $("#checkBtn").classList.toggle("on", !!o);
+  const t = $("#wTimer"); if (t) { t.textContent = hms(ms); t.classList.toggle("live", !!o); }
+}
+setInterval(tick, 1000);
+function renderAll() {
+  const now = new Date(), k = keyOf(now), p = parts(now);
+  $("#clock").textContent = `${DOW[p.wd]} ${T(now)} PKT`;
+  $("#todayDate").textContent = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" }).format(now);
+  const n = renderNow(); renderTimeline(k); renderStatus(k);
+  if (!$("#v-prayer").hidden) renderPrayer(k); if (!$("#v-gym").hidden) renderGym(k); if (!$("#v-diet").hidden) renderDiet(k);
+  if (!$("#v-work").hidden) { renderWork(k); renderWorkPane(); } if (!$("#v-study").hidden) renderStudy(); if (!$("#v-sleep").hidden) renderSleep(); tick();
+}
+
+/* ============================================================
+   Diet logging + brief with Claude
+   ============================================================ */
+$("#mealForm").onsubmit = async e => {
+  e.preventDefault(); const text = $("#mealIn").value.trim(); if (!text) return; const k = keyOf(new Date());
+  if (!sample) {
+    const kc = +$("#mKcalIn").value, pr = +$("#mProtIn").value;
+    if (!kc && !pr) { $("#mealManual").hidden = false; $("#mealOut").textContent = "Live AI estimates aren't available here — enter calories and protein, then press Log again."; return; }
+    day(k).meals.push({ at: new Date().toISOString(), text, kcal: kc || 0, protein: pr || 0 }); $("#mealIn").value = $("#mKcalIn").value = $("#mProtIn").value = ""; saveDay(k); renderAll(); return;
+  }
+  $("#mealBtn").disabled = true; $("#mealOut").innerHTML = '<span class="thinking">Jarvis is estimating…</span>';
+  try {
+    const tg = targets(), tt = totals(k);
+    const r = await sample.json(`Estimate nutrition for this meal eaten in Pakistan. Use typical Pakistani home portions unless sizes are given (1 roti ≈ 120 kcal / 4 g protein; 1 egg ≈ 75 kcal / 6 g). Malik's usual foods: ${S.foods || "not given"}.
+Meal: "${text.replace(/"/g, "'")}"
+${tg ? `Daily targets: ${tg.kcal} kcal, ${tg.protein} g protein. Already eaten today: ${Math.round(tt.kcal)} kcal, ${Math.round(tt.protein)} g protein.` : ""}
+Reply with only JSON: {"items":[{"name":"","kcal":0,"protein_g":0}],"total_kcal":0,"total_protein_g":0,"note":"one short sentence in the voice of JARVIS addressing Malik, e.g. what to add next for protein"}`, { modelTier: "quick" });
+    const kcal = Math.round(+r.total_kcal || 0), protein = Math.round(+r.total_protein_g || 0);
+    day(k).meals.push({ at: new Date().toISOString(), text, kcal, protein, note: String(r.note || "").slice(0, 200), items: (r.items || []).slice(0, 12) });
+    saveDay(k); $("#mealIn").value = ""; $("#mealOut").textContent = `≈ ${kcal} kcal · ${protein} g protein. ${r.note || ""}`; renderAll(); speakIf(r.note || "Logged.");
+  } catch (err) {
+    $("#mealOut").textContent = err && err.code === "not_granted" ? "Claude access was declined, so enter the numbers yourself." : "Couldn't estimate that one. Enter calories and protein yourself.";
+    if (err && ["not_granted", "sampling_disabled", "capability_disabled", "not_declared"].includes(err.code)) sample = null;
+    $("#mealManual").hidden = false;
+  } finally { $("#mealBtn").disabled = false; }
+};
+$("#briefForm").onsubmit = async e => {
+  e.preventDefault(); const q = $("#briefIn").value.trim() || "How am I doing today?"; const out = $("#briefOut");
+  if (!sample) { out.textContent = "Live Jarvis answers need Claude access on this page."; return; }
+  const k = keyOf(new Date()), D = day(k), W = windows(k), tg = targets(), tt = totals(k), g = gymPlan(k);
+  const ctx = { now: T(new Date()), date: k, prayers: Object.fromEntries(PRAYERS.map(([p, n]) => [n, { starts: T(W[p][0]), ends: T(W[p][1]), status: D.prayers[p] || "not logged" }])),
+    gym: g ? { time: T(g.at), workout: g.workout, status: D.gym.status || "not done", missed_in_a_row_before_today: gymMissStreak(k) } : "rest day",
+    diet: { eaten_kcal: Math.round(tt.kcal), eaten_protein_g: Math.round(tt.protein), target_kcal: tg && tg.kcal, target_protein_g: tg && tg.protein, meals: D.meals.map(m => m.text) },
+    work: { hours_today: +(workMs(k) / 36e5).toFixed(2), checked_in_now: !!openSession(), sessions: D.work.map(w => `${T(new Date(w.in))} to ${w.out ? T(new Date(w.out)) : "now"}`) },
+    prayer_streak_days: prayerStreak(k),
+    sleep_last_night: sleepTotal(k) ? hm2(sleepTotal(k)) : "not logged", sleep_target_tonight_h: sleepTarget(k), bedtime_tonight: T(bedtimeFor(k).bed),
+    focus: { important_today: hm2(focusTotals(k).imp), target_h: S.impTarget || 6, current: focusState() && focusState().last ? focusState().last.text : null },
+    leads_followups_due: Object.values(LEADS).filter(l => l.nextFollowUp && l.nextFollowUp <= k && !["Won", "Lost"].includes(l.stage)).length,
+    automation_projects_active: PJ.list.filter(p => ["Building", "Testing"].includes(p.status)).map(p => p.name) };
+  out.innerHTML = '<span class="thinking">Thinking…</span>';
+  try {
+    await sample(`You are JARVIS, Malik's AI (like JARVIS to Tony Stark): calm, confident, supportive; firmer and terse when he is slipping. English only; use a short Pakistani Punjabi line only when being frank about repeated slips. Address him as Malik. Use ONLY the data below; never invent. Under 90 words, no lists unless needed.
+Data: ${JSON.stringify(ctx)}
+Malik asks: ${q}`, { modelTier: "quick", cache: false, onText: ({ text }) => { out.textContent = text; } });
+    speakIf(out.textContent);
+  } catch (err) { out.textContent = err && err.text ? err.text : "Jarvis couldn't answer just now."; }
+};
+
+/* ============================================================
+   Setup form
+   ============================================================ */
+function fillSetup() {
+  $("#city").innerHTML = Object.keys(CITIES).map(c => `<option ${c === S.city ? "selected" : ""}>${c}</option>`).join("");
+  $("#customLoc").hidden = !S.city.startsWith("Custom"); $("#lat").value = S.lat; $("#lng").value = S.lng;
+  $("#offsets").innerHTML = PRAYERS.map(([p, n]) => `<div class="field" style="flex:1 1 70px"><label for="off-${p}">${n}</label><input id="off-${p}" type="number" value="${(S.offsets || {})[p] || 0}"></div>`).join("");
+  $("#gymDays").innerHTML = [1, 2, 3, 4, 5, 6].map(d => `<div class="field"><label for="gd-${d}">${DOW[d]} · ${SESSIONS[d]}</label><input id="gd-${d}" type="time" value="${(S.gym || {})[d] || ""}"></div>`).join("") +
+    `<div class="field"><label>Sun</label><div style="padding:9px 0;color:var(--muted)">Rest</div></div>`;
+  $("#mealTimes").value = (S.meals || []).map(hm12).join(", "); $("#foods").value = S.foods || "";
+  ["height", "weight", "age", "goalW"].forEach(f => $("#" + f).value = S[f] ?? ""); $("#sleepBase").value = S.sleepBase || 8; $("#afterFajr").value = S.afterFajr || ""; $("#wakeTime").value = S.wakeTime || "";
+  $("#voiceSel").value = S.voice || "";
+}
+$("#city").onchange = () => { const c = $("#city").value; $("#customLoc").hidden = !c.startsWith("Custom"); if (CITIES[c]) { $("#lat").value = CITIES[c][0]; $("#lng").value = CITIES[c][1]; } };
+$("#setupForm").onsubmit = e => {
+  e.preventDefault();
+  S.city = $("#city").value; S.lat = +$("#lat").value || DEFAULTS.lat; S.lng = +$("#lng").value || DEFAULTS.lng;
+  S.offsets = Object.fromEntries(PRAYERS.map(([p]) => [p, +$("#off-" + p).value || 0]));
+  S.gym = Object.fromEntries([1, 2, 3, 4, 5, 6].map(d => [d, $("#gd-" + d).value || ""])); S.gym[0] = "";
+  S.meals = $("#mealTimes").value.split(",").map(parseClock).filter(Boolean).sort();
+  S.foods = $("#foods").value.trim();
+  ["height", "weight", "age", "goalW"].forEach(f => S[f] = +$("#" + f).value || null); S.sleepBase = Math.min(10, Math.max(6, +$("#sleepBase").value || 8)); S.afterFajr = $("#afterFajr").value; S.wakeTime = $("#wakeTime").value;
+  S.voice = $("#voiceSel").value; S.since = S.since || keyOf(new Date());
+  saveSettings(); $("#setupSaved").textContent = "Saved ✓"; setTimeout(() => $("#setupSaved").textContent = "", 2500); renderAll();
+};
+
+/* ============================================================
+   Shared data for Work / Study / Sleep
+   ============================================================ */
+let AG = { clients: [], team: [], revenue: [] };          // agency doc
+let PJ = { list: [], lastAsk: "" };                        // automation projects doc
+let ST = { rules: "" };                                    // study doc
+const LEADS = {}, ASG = {};                               // subcollections
+const STAGES = ["New", "Researched", "Connection sent", "Connected", "Replied", "Call booked", "Proposal", "Won", "Lost"];
+const GOALS = ["Win new agency clients", "Deliver for current clients", "Grow LinkedIn presence", "Build automation products"];
+const uidShort = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const saveAG = () => persist("agency", AG), savePJ = () => persist("projects", PJ), saveST = () => persist("study", ST);
+const todayKey = () => keyOf(new Date());
+const dLabel = k => k ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(k + "T12:00Z")) : "";
+
+async function saveSub(name, id, obj) {
+  if (!db || !uid) { const all = local("sub." + name) || {}; all[id] = obj; local("sub." + name, all); return; }
+  await db.collection(`data/users/${uid}/${name}`).doc(id).set(JSON.parse(JSON.stringify(obj)));
+}
+async function delSub(name, id) {
+  if (!db || !uid) { const all = local("sub." + name) || {}; delete all[id]; local("sub." + name, all); return; }
+  await db.collection(`data/users/${uid}/${name}`).doc(id).delete();
+}
+function loadScript(src) { return new Promise((res, rej) => { if (document.querySelector(`script[src="${src}"]`)) return res();
+  const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("Couldn't load " + src)); document.head.appendChild(s); }); }
+function miniMd(text) {
+  const out = []; let list = false;
+  const inl = s => esc(s).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  for (const raw of String(text).split("\n")) { const l = raw.trimEnd();
+    const b = l.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)/);
+    if (b) { if (!list) { out.push("<ul>"); list = true; } out.push(`<li>${inl(b[1])}</li>`); continue; }
+    if (list) { out.push("</ul>"); list = false; }
+    if (!l.trim()) continue; const h = l.match(/^(#{1,4})\s+(.*)/);
+    out.push(h ? `<h${Math.min(4, h[1].length + 1)}>${inl(h[2])}</h${Math.min(4, h[1].length + 1)}>` : `<p>${inl(l)}</p>`); }
+  if (list) out.push("</ul>"); return out.join("");
+}
+async function copyText(t, msgEl) { try { await navigator.clipboard.writeText(t); if (msgEl) msgEl.textContent = "Copied."; } catch (e) { if (msgEl) msgEl.textContent = "Copy blocked here. Select the text and copy manually."; } }
+
+/* ============================================================
+   FOCUS: 2-hour slots, important-work target, alignment checks
+   ============================================================ */
+const SLOT = 2 * 36e5, IDLE = 30 * 6e4;
+const IMPORTANT_AREAS = ["LinkedIn", "Agency", "Automation", "Study"];
+function sessionFocus(o) { return (day(o.k).focus || []).filter(f => new Date(f.at) >= new Date(o.w.in)).sort((a, b) => new Date(a.at) - new Date(b.at)); }
+function focusState() {
+  const o = openSession(); if (!o) return null;
+  const now = new Date(), start = new Date(o.w.in), el = now - start, slot = Math.floor(el / SLOT) + 1, slotStart = new Date(start.getTime() + (slot - 1) * SLOT);
+  const F = sessionFocus(o), last = F[F.length - 1];
+  const need = !last || new Date(last.at) < slotStart ? "slot" : now - new Date(last.at) > IDLE ? "idle" : null;
+  return { o, slot, slotStart, slotEnd: new Date(slotStart.getTime() + SLOT), last, need, F };
+}
+function focusTotals(k, now = new Date()) {
+  let imp = 0, low = 0; const D = day(k);
+  for (const w of D.work || []) { const s = new Date(w.in), e = w.out ? new Date(w.out) : now;
+    const F = (D.focus || []).filter(f => new Date(f.at) >= s && new Date(f.at) <= e).sort((a, b) => new Date(a.at) - new Date(b.at));
+    F.forEach((f, i) => { const d = Math.max(0, (i + 1 < F.length ? new Date(F[i + 1].at) : e) - new Date(f.at)); f.important ? imp += d : low += d; }); }
+  return { imp, low };
+}
+async function submitFocus(text, area, cont = false) {
+  const st = focusState(); if (!st) return;
+  const entry = { at: new Date().toISOString(), text, area, important: IMPORTANT_AREAS.includes(area), verdict: "", note: "", cont };
+  if (cont && st.last) Object.assign(entry, { text: st.last.text, area: st.last.area, important: st.last.important, verdict: st.last.verdict, note: st.last.note });
+  const D = day(st.o.k); D.focus = D.focus || []; D.focus.push(entry); saveDay(st.o.k); renderAll(); renderFocus();
+  if (cont || !sample) return;
+  const ft = focusTotals(todayKey());
+  try {
+    const r = await sample.json(`You are JARVIS reviewing Malik's current work against his goals. Goals: ${GOALS.join("; ")}. Daily target: at least 6 hours on important work. Important so far today: ${hm2(ft.imp)}. Time now: ${T(new Date())}. Recent focus: ${JSON.stringify(st.F.slice(-4).map(f => f.text))}.
+He is now working on: "${text.replace(/"/g, "'")}" (area: ${area}).
+Decide: important = true only if it directly advances one of the goals with real results (revenue, delivery, pipeline, a shipped automation, graded university work). verdict: "keep" (good use of time), "adjust" (right area, sharpen it), or "switch" (low value now). note: max 30 words, JARVIS voice, address him as Malik, concrete.
+Reply only JSON: {"important":true,"verdict":"keep","note":""}`, { modelTier: "quick" });
+    Object.assign(entry, { important: !!r.important, verdict: ["keep", "adjust", "switch"].includes(r.verdict) ? r.verdict : "keep", note: String(r.note || "").slice(0, 240) });
+    saveDay(st.o.k); renderAll(); renderFocus(); speakIf(entry.note);
+  } catch (e) { if (e && ["not_granted", "sampling_disabled"].includes(e.code)) sample = null; }
+}
+$("#focusForm").onsubmit = e => { e.preventDefault(); const t = $("#focusIn").value.trim(); if (!t) return; $("#focusIn").value = ""; submitFocus(t, $("#focusArea").value); };
+$("#stillBtn").onclick = () => submitFocus("", "", true);
+function renderFocus() {
+  const k = todayKey(), now = new Date(), st = focusState(), ft = focusTotals(k, now), target = (S.impTarget || 6) * 36e5;
+  $("#fImpTxt").textContent = `${hm2(ft.imp)} / ${S.impTarget || 6}h`;
+  $("#fImpBar i").style.width = Math.min(100, ft.imp / target * 100) + "%"; $("#fImpBar").classList.toggle("ok", ft.imp >= target);
+  $("#fSplit").textContent = `Low-value time: ${hm2(ft.low)}` + (ft.imp < target && st ? ` · ${hm2(target - ft.imp)} of important work still to go` : "");
+  $("#fPrompt").hidden = !st;
+  if (st) { $("#fPromptTitle").textContent = st.need === "slot" ? `Slot ${st.slot} · ${T(st.slotStart)}–${T(st.slotEnd)}: what's the focus?` : st.need === "idle" ? `Still on “${st.last.text}”?` : "Switched task? Tell Jarvis.";
+    $("#stillRow").hidden = !(st.need === "idle" && st.last); $("#stillTxt").textContent = st.last ? `Last update ${T(new Date(st.last.at))}` : ""; }
+  const cur = st && st.last;
+  $("#fCur").innerHTML = cur ? `<div class="verdict ${cur.verdict || ""}"><b>${esc(cur.text)}</b><span class="tag">${esc(cur.area)} · ${cur.important ? "important" : "low-value"}</span>${cur.verdict ? `<div><span class="vd">${{ keep: "Keep going", adjust: "Adjust", switch: "Switch" }[cur.verdict]}</span> ${esc(cur.note)}</div>` : sample ? '<div class="hint">Jarvis is checking this against your goals…</div>' : ""}</div>` : "";
+  const D = day(k), F = (D.focus || []).slice().reverse();
+  $("#fLog").innerHTML = F.length ? F.map(f => `<div class="flog"><span class="tm">${T(new Date(f.at))}</span><span>${f.cont ? '<span class="hint">continued</span> ' : ""}${esc(f.text)}</span><span class="tag ${f.important ? "live" : ""}">${f.important ? "important" : "low"}</span></div>`).join("") : '<p class="hint">Nothing logged yet.</p>';
+  const o = openSession();
+  if (o) { const start = new Date(o.w.in), n = Math.floor((now - start) / SLOT) + 1, F2 = sessionFocus(o);
+    $("#wSlots").innerHTML = Array.from({ length: n }, (_, i) => { const s = new Date(start.getTime() + i * SLOT), e = new Date(s.getTime() + SLOT);
+      const items = F2.filter(f => new Date(f.at) >= s && new Date(f.at) < e && !f.cont).map(f => esc(f.text));
+      return `<div class="slot ${i + 1 === n ? "cur" : ""}"><span class="tm">Slot ${i + 1} · ${T(s)}–${T(e)}</span><span>${items.join(" · ") || '<span class="hint">no focus set</span>'}</span></div>`; }).join("");
+  } else $("#wSlots").innerHTML = '<p class="hint">Slots appear once you check in.</p>';
+}
+
+/* ============================================================
+   LINKEDIN CRM
+   ============================================================ */
+let crmFilter = "", crmOpen = null, crmPage = 0;
+const normUrl = u => String(u || "").trim().toLowerCase().replace(/^https?:\/\/(www\.)?/, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
+const leadKey = l => l.url ? "u:" + normUrl(l.url) : "n:" + (String(l.name || "").toLowerCase().trim() + "|" + String(l.company || "").toLowerCase().trim());
+function nameFromUrl(u) { const m = String(u).match(/linkedin\.com\/in\/([^/?#]+)/i); if (!m) return ""; return decodeURIComponent(m[1]).replace(/-[0-9a-f]{6,}$/i, "").split("-").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" "); }
+function renderCRM() {
+  const all = Object.values(LEADS), today = todayKey();
+  $("#crmTotal").textContent = `${all.length} lead${all.length === 1 ? "" : "s"}`;
+  const counts = Object.fromEntries(STAGES.map(s => [s, 0])); all.forEach(l => counts[l.stage] = (counts[l.stage] || 0) + 1);
+  $("#crmStages").innerHTML = `<button class="stage ${!crmFilter ? "on" : ""}" data-st="">All <b>${all.length}</b></button>` + STAGES.map((s, i) => `<button class="stage ${crmFilter === s ? "on" : ""}" data-st="${s}"><span class="sn">${i + 1}</span>${s} <b>${counts[s] || 0}</b></button>`).join("");
+  $("#crmStages").querySelectorAll("[data-st]").forEach(b => b.onclick = () => { crmFilter = b.dataset.st; crmPage = 0; renderCRM(); });
+  const due = all.filter(l => l.nextFollowUp && l.nextFollowUp <= today && !["Won", "Lost"].includes(l.stage));
+  $("#crmRadar").innerHTML = due.length ? `<div class="radar">⏱ <b>${due.length}</b> follow-up${due.length > 1 ? "s" : ""} due: ${due.slice(0, 5).map(l => `<button class="linkbtn" data-open="${l.id}">${esc(l.name)}</button>`).join(", ")}${due.length > 5 ? "…" : ""}</div>` : "";
+  $("#crmRadar").querySelectorAll("[data-open]").forEach(b => b.onclick = () => { crmOpen = b.dataset.open; crmFilter = ""; renderCRM(); });
+  const q = $("#crmSearch").value.trim().toLowerCase();
+  let rows = all.filter(l => (!crmFilter || l.stage === crmFilter) && (!q || [l.name, l.company, l.title, l.location].join(" ").toLowerCase().includes(q)));
+  rows.sort((a, b) => (a.nextFollowUp || "9") .localeCompare(b.nextFollowUp || "9") || String(b.createdAt).localeCompare(String(a.createdAt)));
+  const per = 50, pages = Math.max(1, Math.ceil(rows.length / per)); crmPage = Math.min(crmPage, pages - 1);
+  const view = rows.slice(crmPage * per, crmPage * per + per);
+  $("#crmList").innerHTML = (rows.length ? view.map(l => leadRow(l, today)).join("") : `<p class="hint">${all.length ? "No leads match." : "No leads yet. Use Import leads to bring in a CSV, Excel file, Google Sheet cells or a pasted list."}</p>`) +
+    (pages > 1 ? `<div class="row" style="margin-top:10px;align-items:center"><button class="btn sm" id="pgPrev" ${crmPage ? "" : "disabled"}>Previous</button><span class="hint">Page ${crmPage + 1} of ${pages}</span><button class="btn sm" id="pgNext" ${crmPage < pages - 1 ? "" : "disabled"}>Next</button></div>` : "");
+  if ($("#pgPrev")) { $("#pgPrev").onclick = () => { crmPage--; renderCRM(); }; $("#pgNext").onclick = () => { crmPage++; renderCRM(); }; }
+  $("#crmList").querySelectorAll("[data-row]").forEach(r => r.onclick = e => { if (e.target.closest("select,button,a,input,textarea")) return; crmOpen = crmOpen === r.dataset.row ? null : r.dataset.row; renderCRM(); });
+  $("#crmList").querySelectorAll("select[data-stage]").forEach(s => s.onchange = () => { const l = LEADS[s.dataset.stage]; l.stage = s.value; l.updatedAt = new Date().toISOString(); saveSub("crm/leads", l.id, l); renderCRM(); });
+  if (crmOpen && LEADS[crmOpen]) bindLeadEditor(LEADS[crmOpen]);
+}
+function leadRow(l, today) {
+  const due = l.nextFollowUp && l.nextFollowUp <= today && !["Won", "Lost"].includes(l.stage);
+  return `<div class="lead ${crmOpen === l.id ? "open" : ""}" data-row="${l.id}">
+    <div class="lmain"><b>${esc(l.name || "(no name)")}</b><span class="hint">${esc([l.title, l.company].filter(Boolean).join(" · "))}</span></div>
+    <select data-stage="${l.id}" aria-label="Stage">${STAGES.map(s => `<option ${s === l.stage ? "selected" : ""}>${s}</option>`).join("")}</select>
+    <span class="num ${due ? "due" : "hint"}">${l.nextFollowUp ? (due ? "Due " : "") + dLabel(l.nextFollowUp) : ""}</span>
+  </div>${crmOpen === l.id ? leadEditor(l) : ""}`;
+}
+function leadEditor(l) {
+  const f = (id, lab, v, type = "text") => `<div class="field"><label for="le-${id}">${lab}</label><input class="inp" id="le-${id}" type="${type}" value="${esc(v || "")}"></div>`;
+  return `<div class="leditor">
+    <div class="row">${f("name", "Name", l.name)}${f("title", "Title", l.title)}${f("company", "Company", l.company)}</div>
+    <div class="row">${f("url", "LinkedIn URL", l.url)}${f("email", "Email", l.email)}${f("location", "Location", l.location)}</div>
+    <div class="row">${f("last", "Last contact", l.lastContact, "date")}${f("next", "Next follow-up", l.nextFollowUp, "date")}</div>
+    <div class="field"><label for="le-notes">Notes</label><textarea id="le-notes" rows="2">${esc(l.notes || "")}</textarea></div>
+    <div class="row"><button class="btn sm pri" id="le-save" type="button">Save</button><button class="btn sm" id="le-draft" type="button">Draft messages</button><button class="btn sm ok" id="le-sent" type="button">I sent it</button>
+      ${l.url ? `<a class="btn sm" href="${esc(/^https?:/i.test(l.url) ? l.url : "https://" + l.url)}" target="_blank" rel="noopener">Open profile</a>` : ""}<button class="btn sm" id="le-del" type="button">Delete</button><span class="hint" id="le-msg"></span></div>
+    <div id="le-drafts">${draftsHtml(l)}</div></div>`;
+}
+function draftsHtml(l) { const d = l.drafts || {}; if (!d.note && !d.follow) return "";
+  return `<div class="drafts">${d.note ? `<div class="dr"><div class="hint">Connection note (${d.note.length}/300)</div><p>${esc(d.note)}</p><button class="btn sm" data-copy="note" type="button">Copy</button></div>` : ""}
+    ${d.follow ? `<div class="dr"><div class="hint">Follow-up message</div><p>${esc(d.follow)}</p><button class="btn sm" data-copy="follow" type="button">Copy</button></div>` : ""}</div>`; }
+function bindLeadEditor(l) {
+  const val = id => $("#le-" + id).value.trim();
+  $("#le-save").onclick = () => { Object.assign(l, { name: val("name"), title: val("title"), company: val("company"), url: val("url"), email: val("email"), location: val("location"),
+    lastContact: val("last"), nextFollowUp: val("next"), notes: $("#le-notes").value, updatedAt: new Date().toISOString() }); saveSub("crm/leads", l.id, l); $("#le-msg").textContent = "Saved."; renderCRM(); };
+  $("#le-sent").onclick = () => { const t = todayKey(); l.lastContact = t; l.nextFollowUp = dayShift(t, 3);
+    const i = STAGES.indexOf(l.stage); if (i < 2) l.stage = "Connection sent"; else if (["Connected", "Replied"].includes(l.stage)) l.nextFollowUp = dayShift(t, 4);
+    l.updatedAt = new Date().toISOString(); saveSub("crm/leads", l.id, l); speakIf("Logged. I'll remind you to follow up in three days."); renderCRM(); };
+  $("#le-del").onclick = e => { const b = e.currentTarget; if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Confirm delete"; return; } delete LEADS[l.id]; delSub("crm/leads", l.id); crmOpen = null; renderCRM(); };
+  $("#le-draft").onclick = async () => {
+    if (!sample) { $("#le-msg").textContent = "Drafting needs Claude access on this page."; return; }
+    $("#le-msg").textContent = "Jarvis is drafting…";
+    try { const r = await sample.json(`Draft LinkedIn outreach for Malik. His offer: ${S.offer || "a marketing & automation agency"}.
+Lead: ${JSON.stringify({ name: l.name, title: l.title, company: l.company, location: l.location, stage: l.stage, notes: l.notes })}.
+Rules: connection note max 280 characters, personal, no pitch in the first line, no emojis, no hype, ends with a light reason to connect. Follow-up: 2–4 short sentences for after they accept/reply, one clear low-pressure ask. English. Never invent facts about the lead.
+Reply only JSON: {"note":"","follow":""}`, { modelTier: "quick" });
+      l.drafts = { note: String(r.note || "").slice(0, 300), follow: String(r.follow || "").slice(0, 900) }; l.updatedAt = new Date().toISOString();
+      saveSub("crm/leads", l.id, l); $("#le-drafts").innerHTML = draftsHtml(l); bindCopies(l); $("#le-msg").textContent = "Drafted. Copy, send on LinkedIn, then tap I sent it."; }
+    catch (e) { $("#le-msg").textContent = "Couldn't draft just now."; }
+  };
+  bindCopies(l);
+}
+function bindCopies(l) { document.querySelectorAll("#le-drafts [data-copy]").forEach(b => b.onclick = () => copyText(l.drafts[b.dataset.copy], $("#le-msg"))); }
+$("#crmSearch").oninput = () => { crmPage = 0; renderCRM(); };
+$("#crmAddBtn").onclick = () => { const l = { id: uidShort(), name: "New lead", stage: "New", createdAt: new Date().toISOString(), source: "manual" }; LEADS[l.id] = l; saveSub("crm/leads", l.id, l); crmOpen = l.id; crmFilter = ""; renderCRM(); setTimeout(() => $("#le-name") && $("#le-name").select(), 50); };
+$("#crmOfferBtn").onclick = () => { $("#offerForm").hidden = !$("#offerForm").hidden; $("#offerIn").value = S.offer || ""; };
+$("#offerForm").onsubmit = e => { e.preventDefault(); S.offer = $("#offerIn").value.trim(); saveSettings(); $("#offerForm").hidden = true; };
+
+/* ---------- bulk import wizard ---------- */
+const IMP = { rows: [], header: null, map: {}, prepared: [] };
+const FIELDS = [["name", "Full name"], ["first", "First name"], ["last", "Last name"], ["title", "Title / headline"], ["company", "Company"], ["url", "LinkedIn URL"], ["email", "Email"], ["location", "Location"]];
+const GUESS = { name: /^(full ?name|name|contact|lead)$/i, first: /first/i, last: /last|surname/i, title: /title|headline|position|role|designation/i, company: /company|organi[sz]ation|account|business/i,
+  url: /linkedin|profile|url|link/i, email: /e-?mail/i, location: /location|city|country|region/i };
+function parseDelimited(text) {
+  const first = text.split(/\r?\n/).find(l => l.trim()) || "";
+  const delim = first.includes("\t") ? "\t" : (first.split(";").length > first.split(",").length ? ";" : ",");
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) { const c = text[i];
+    if (q) { if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; continue; }
+    if (c === '"' && !cell) q = true; else if (c === delim) { row.push(cell); cell = ""; } else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); cell = ""; if (row.some(x => x.trim())) rows.push(row); row = []; } else cell += c; }
+  row.push(cell); if (row.some(x => x.trim())) rows.push(row);
+  return rows.map(r => r.map(x => x.trim()));
+}
+function setStep(n) { [1, 2, 3].forEach(i => { $("#imp" + i).hidden = i !== n; $("#st" + i).className = i <= n ? "on" : ""; }); }
+$("#crmImportBtn").onclick = () => { $("#crmImport").hidden = false; setStep(1); $("#impMsg").textContent = ""; $("#crmImport").scrollIntoView({ behavior: "smooth" }); };
+$("#impClose").onclick = () => { $("#crmImport").hidden = true; };
+$("#impBack").onclick = () => setStep(1);
+$("#impNext").onclick = async () => {
+  $("#impMsg").textContent = "";
+  try {
+    const file = $("#impFile").files[0];
+    if (file && /\.xlsx?$/i.test(file.name)) {
+      $("#impMsg").textContent = "Reading spreadsheet…";
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+      const wb = XLSX.read(await file.arrayBuffer(), { type: "array" }); const ws = wb.Sheets[wb.SheetNames[0]];
+      IMP.rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }).map(r => r.map(x => String(x).trim())).filter(r => r.some(Boolean));
+    } else if (file) IMP.rows = parseDelimited(await file.text());
+    else IMP.rows = parseDelimited($("#impText").value);
+  } catch (e) { $("#impMsg").textContent = "Couldn't read that file: " + (e.message || e); return; }
+  if (!IMP.rows.length) { $("#impMsg").textContent = "Paste something or choose a file first."; return; }
+  const h = IMP.rows[0], isHeader = h.length > 1 && h.some(c => Object.values(GUESS).some(rx => rx.test(c))) && !h.some(c => /linkedin\.com\/in\//i.test(c));
+  if (h.length === 1) {                                        // one item per line: URLs or names
+    IMP.header = ["Item"]; IMP.map = {}; IMP.single = true; IMP.data = IMP.rows.map(r => r[0]);
+  } else { IMP.single = false; IMP.header = isHeader ? h : h.map((_, i) => `Column ${i + 1}`); IMP.data = isHeader ? IMP.rows.slice(1) : IMP.rows;
+    IMP.map = {}; FIELDS.forEach(([f]) => { const i = IMP.header.findIndex(c => GUESS[f].test(c)); if (i >= 0) IMP.map[f] = i; });
+    if (IMP.map.name != null && (IMP.map.first === IMP.map.name || IMP.map.last === IMP.map.name)) { delete IMP.map.first; delete IMP.map.last; }
+    if (IMP.map.url == null) { const i = IMP.data[0] ? IMP.data[0].findIndex(c => /linkedin\.com\//i.test(c)) : -1; if (i >= 0) IMP.map.url = i; } }
+  setStep(2); renderImportReview();
+};
+function buildLeads() {
+  const out = [];
+  if (IMP.single) for (const item of IMP.data) { const isUrl = /linkedin\.com\//i.test(item); out.push({ name: isUrl ? nameFromUrl(item) : item, url: isUrl ? item : "" }); }
+  else for (const r of IMP.data) { const g = f => IMP.map[f] != null ? String(r[IMP.map[f]] || "").trim() : "";
+    out.push({ name: g("name") || [g("first"), g("last")].filter(Boolean).join(" ") || nameFromUrl(g("url")), title: g("title"), company: g("company"), url: g("url"), email: g("email"), location: g("location") }); }
+  return out;
+}
+function renderImportReview() {
+  $("#impMap").innerHTML = IMP.single ? '<p class="hint">One item per line detected (URLs or names). Names are taken from LinkedIn URLs automatically. For messy lines like "Sara – CMO at Bloom", use Clean messy list with Jarvis.</p>'
+    : FIELDS.map(([f, lab]) => `<label class="mapf">${lab}<select data-map="${f}"><option value="">—</option>${IMP.header.map((c, i) => `<option value="${i}" ${IMP.map[f] === i ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>`).join("");
+  $("#impMap").querySelectorAll("[data-map]").forEach(s => s.onchange = () => { s.value === "" ? delete IMP.map[s.dataset.map] : IMP.map[s.dataset.map] = +s.value; renderImportReview(); });
+  const existing = new Set(Object.values(LEADS).map(leadKey)), seen = new Set(); let dup = 0, bad = 0;
+  IMP.prepared = buildLeads().filter(l => { if (!l.name && !l.url) { bad++; return false; } const k = leadKey(l); if (existing.has(k) || seen.has(k)) { dup++; return false; } seen.add(k); return true; });
+  $("#impCounts").innerHTML = `<span class="tag live">${IMP.prepared.length} new</span> <span class="tag">${dup} duplicate${dup === 1 ? "" : "s"} skipped</span> <span class="tag ${bad ? "warn" : ""}">${bad} without name/URL skipped</span>`;
+  $("#impPreview").innerHTML = "<tr><th>Name</th><th>Title</th><th>Company</th><th>URL</th></tr>" + IMP.prepared.slice(0, 8).map(l => `<tr><td>${esc(l.name)}</td><td>${esc(l.title || "")}</td><td>${esc(l.company || "")}</td><td>${esc((l.url || "").replace(/^https?:\/\/(www\.)?/, "").slice(0, 40))}</td></tr>`).join("");
+  $("#impGo").textContent = `Import ${IMP.prepared.length} lead${IMP.prepared.length === 1 ? "" : "s"}`; $("#impGo").disabled = !IMP.prepared.length;
+  $("#impClean").hidden = !sample;
+}
+$("#impClean").onclick = async () => {
+  const lines = (IMP.single ? IMP.data : IMP.data.map(r => r.join(" | "))).slice(0, 150);
+  $("#impClean").disabled = true; $("#impClean").textContent = "Jarvis is cleaning…";
+  try { const r = await sample.json(`Turn these lines into LinkedIn leads. Extract only what is present; never invent. Reply only a JSON array of {"name":"","title":"","company":"","url":"","email":"","location":""}.
+Lines:\n${lines.join("\n")}`, { modelTier: "quick" });
+    if (Array.isArray(r)) { IMP.single = false; IMP.header = ["name", "title", "company", "url", "email", "location"]; IMP.data = r.map(x => IMP.header.map(h => String(x[h] || "")));
+      IMP.map = { name: 0, title: 1, company: 2, url: 3, email: 4, location: 5 }; renderImportReview(); } }
+  catch (e) { $("#impCounts").insertAdjacentHTML("beforeend", ' <span class="tag warn">Cleaning failed, try again</span>'); }
+  finally { $("#impClean").disabled = false; $("#impClean").textContent = "Clean messy list with Jarvis"; }
+};
+$("#impGo").onclick = async () => {
+  const list = IMP.prepared.slice(); if (!list.length) return; setStep(3); let done = 0, failed = 0; const now = new Date().toISOString(), src = $("#impFile").files[0] ? $("#impFile").files[0].name : "paste";
+  const queue = list.map(l => ({ ...l, id: uidShort(), stage: "New", source: src, createdAt: now }));
+  const worker = async () => { while (queue.length) { const l = queue.shift(); LEADS[l.id] = l; try { await saveSub("crm/leads", l.id, l); done++; } catch (e) { failed++; }
+    $("#impBar").style.width = ((done + failed) / list.length * 100) + "%"; $("#impDone").textContent = `${done} of ${list.length} imported${failed ? `, ${failed} failed` : ""}…`; } };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  $("#impDone").textContent = `Done. ${done} lead${done === 1 ? "" : "s"} added to New${failed ? `, ${failed} failed (try again)` : ""}.`;
+  $("#impText").value = ""; $("#impFile").value = ""; renderCRM(); speakIf(`${done} leads imported, Malik.`);
+};
+
+/* ============================================================
+   AGENCY WORK
+   ============================================================ */
+const mKey = () => todayKey().slice(0, 7), wKey = () => weekKeys(todayKey())[0];
+const money = (n, c) => `${c} ${Math.round(+n || 0).toLocaleString("en-US")}`;
+let agOpen = null;
+function renderAgency() {
+  const m = mKey(), wk = wKey(), today = todayKey();
+  const active = AG.clients.filter(c => c.status === "Active");
+  const mrr = {}; active.forEach(c => { if (+c.retainer) mrr[c.currency] = (mrr[c.currency] || 0) + +c.retainer; });
+  const overdue = AG.clients.flatMap(c => (c.deliverables || []).filter(d => !d.done && d.due && d.due < today));
+  const scores = AG.team.map(t => t.weeks && t.weeks[wk] && +t.weeks[wk].score).filter(Boolean);
+  const newM = AG.clients.filter(c => (c.start || "").startsWith(m)).length, lostM = AG.clients.filter(c => (c.lostAt || "").startsWith(m)).length;
+  const rev = {}; AG.revenue.filter(r => (r.date || "").startsWith(m)).forEach(r => rev[r.currency] = (rev[r.currency] || 0) + +r.amount);
+  const kpi = (lab, val, cls = "") => `<div class="kpi ${cls}"><span>${lab}</span><b class="num">${val}</b></div>`;
+  $("#agSummary").innerHTML = kpi("Monthly retainers", Object.entries(mrr).map(([c, v]) => money(v, c)).join(" + ") || "—") + kpi("Active clients", active.length) +
+    kpi("Overdue deliverables", overdue.length, overdue.length ? "bad" : "") + kpi("Team score (this week)", scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) + " / 10" : "—") +
+    kpi("Clients this month", `+${newM} / −${lostM}`) + kpi("Collected this month", Object.entries(rev).map(([c, v]) => money(v, c)).join(" + ") || "—");
+  $("#agClients").innerHTML = AG.clients.length ? AG.clients.map(c => clientHtml(c, today)).join("") : '<p class="hint">Add your first client below.</p>';
+  bindClients();
+  $("#agWeek").textContent = `Week of ${dLabel(wk)}`;
+  $("#agTeam").innerHTML = AG.team.length ? AG.team.map(t => { const w = (t.weeks || {})[wk] || {};
+    return `<div class="tm-row" data-tm="${t.id}"><div><b>${esc(t.name)}</b> <span class="hint">${esc(t.role || "")}</span></div>
+      <div class="row tmf"><label>Done<input class="inp" type="number" min="0" data-f="done" value="${w.done ?? ""}"></label><label>Overdue<input class="inp" type="number" min="0" data-f="overdue" value="${w.overdue ?? ""}"></label>
+      <label>Score<input class="inp" type="number" min="1" max="10" data-f="score" value="${w.score ?? ""}"></label><label style="flex:2 1 140px">Note<input class="inp" data-f="note" value="${esc(w.note || "")}"></label>
+      <button class="x" data-tdel="${t.id}" aria-label="Remove member">✕</button></div></div>`; }).join("") : '<p class="hint">Add team members to score them weekly.</p>';
+  $("#agTeam").querySelectorAll("[data-tm]").forEach(row => { const t = AG.team.find(x => x.id === row.dataset.tm);
+    row.querySelectorAll("[data-f]").forEach(inp => inp.onchange = () => { t.weeks = t.weeks || {}; t.weeks[wk] = t.weeks[wk] || {}; t.weeks[wk][inp.dataset.f] = inp.type === "number" ? (inp.value === "" ? "" : +inp.value) : inp.value; saveAG(); renderAgency(); }); });
+  $("#agTeam").querySelectorAll("[data-tdel]").forEach(b => b.onclick = () => { if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Remove?"; return; } AG.team = AG.team.filter(t => t.id !== b.dataset.tdel); saveAG(); renderAgency(); });
+  $("#agRevTotal").textContent = Object.entries(rev).map(([c, v]) => money(v, c)).join(" + ");
+  const revs = AG.revenue.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 12);
+  $("#agRevenue").innerHTML = revs.length ? revs.map(r => `<div class="wsess"><span>${dLabel(r.date)} · ${esc(r.note || "")}</span><span class="d">${money(r.amount, r.currency)}</span><button class="x" data-rdel="${r.id}" aria-label="Delete">✕</button></div>`).join("") : '<p class="hint">No payments logged yet.</p>';
+  $("#agRevenue").querySelectorAll("[data-rdel]").forEach(b => b.onclick = () => { AG.revenue = AG.revenue.filter(r => r.id !== b.dataset.rdel); saveAG(); renderAgency(); });
+}
+function clientHtml(c, today) {
+  const dl = (c.deliverables || []), od = dl.filter(d => !d.done && d.due && d.due < today).length, open = dl.filter(d => !d.done).length;
+  return `<div class="client ${agOpen === c.id ? "open" : ""}"><div class="lead" data-cl="${c.id}"><div class="lmain"><b>${esc(c.name)}</b><span class="hint">${c.retainer ? money(c.retainer, c.currency) + "/mo · " : ""}${open} open${od ? ` · <span style="color:var(--err)">${od} overdue</span>` : ""}</span></div>
+    <select data-cst="${c.id}" aria-label="Status">${["Active", "Paused", "Lost"].map(s => `<option ${s === c.status ? "selected" : ""}>${s}</option>`).join("")}</select></div>
+    ${agOpen === c.id ? `<div class="leditor">
+      <div class="h4">Deliverables</div>
+      ${dl.map(d => `<label class="dl ${d.done ? "done" : ""}"><input type="checkbox" data-dd="${d.id}" ${d.done ? "checked" : ""}><span>${esc(d.title)}</span><span class="num ${!d.done && d.due && d.due < today ? "due" : "hint"}">${d.due ? dLabel(d.due) : ""}</span></label>`).join("") || '<p class="hint">No deliverables yet.</p>'}
+      <div class="row" style="margin-top:6px"><input class="inp" id="dlTitle" placeholder="Deliverable" style="flex:2 1 160px"><input class="inp" id="dlDue" type="date"><button class="btn sm" id="dlAdd" type="button">Add</button></div>
+      <div class="h4" style="margin-top:12px">Campaign results</div>
+      ${(c.results || []).slice(-8).map(r => `<div class="wsess"><span>${esc(r.month)} · ${esc(r.metric)}</span><span class="d">${esc(r.value)}</span><span></span></div>`).join("") || '<p class="hint">Log the numbers you report (leads, ROAS, spend, CTR…).</p>'}
+      <div class="row" style="margin-top:6px"><input class="inp" id="crMonth" type="month" value="${mKey()}"><input class="inp" id="crMetric" placeholder="Metric e.g. ROAS"><input class="inp" id="crVal" placeholder="Value e.g. 3.4x"><button class="btn sm" id="crAdd" type="button">Add</button></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" id="clDel" type="button">Delete client</button></div></div>` : ""}</div>`;
+}
+function bindClients() {
+  document.querySelectorAll("[data-cl]").forEach(r => r.onclick = e => { if (e.target.closest("select")) return; agOpen = agOpen === r.dataset.cl ? null : r.dataset.cl; renderAgency(); });
+  document.querySelectorAll("[data-cst]").forEach(s => s.onchange = () => { const c = AG.clients.find(x => x.id === s.dataset.cst); c.status = s.value; if (s.value === "Lost") c.lostAt = todayKey(); saveAG(); renderAgency(); });
+  const c = AG.clients.find(x => x.id === agOpen); if (!c) return;
+  document.querySelectorAll("[data-dd]").forEach(cb => cb.onchange = () => { const d = c.deliverables.find(x => x.id === cb.dataset.dd); d.done = cb.checked; d.doneAt = cb.checked ? todayKey() : ""; saveAG(); renderAgency(); });
+  $("#dlAdd").onclick = () => { const t = $("#dlTitle").value.trim(); if (!t) return; (c.deliverables = c.deliverables || []).push({ id: uidShort(), title: t, due: $("#dlDue").value, done: false }); saveAG(); renderAgency(); };
+  $("#crAdd").onclick = () => { const mt = $("#crMetric").value.trim(), v = $("#crVal").value.trim(); if (!mt || !v) return; (c.results = c.results || []).push({ month: $("#crMonth").value, metric: mt, value: v }); saveAG(); renderAgency(); };
+  $("#clDel").onclick = e => { const b = e.currentTarget; if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Confirm delete"; return; } AG.clients = AG.clients.filter(x => x.id !== c.id); agOpen = null; saveAG(); renderAgency(); };
+}
+$("#clientForm").onsubmit = e => { e.preventDefault(); AG.clients.push({ id: uidShort(), name: $("#cName").value.trim(), retainer: +$("#cRet").value || 0, currency: $("#cCur").value, status: "Active", start: todayKey(), deliverables: [], results: [] });
+  $("#cName").value = $("#cRet").value = ""; saveAG(); renderAgency(); };
+$("#teamForm").onsubmit = e => { e.preventDefault(); AG.team.push({ id: uidShort(), name: $("#tName").value.trim(), role: $("#tRole").value.trim(), weeks: {} }); $("#tName").value = $("#tRole").value = ""; saveAG(); renderAgency(); };
+$("#revForm").onsubmit = e => { e.preventDefault(); AG.revenue.push({ id: uidShort(), date: $("#rDate").value || todayKey(), amount: +$("#rAmt").value, currency: $("#rCur").value, note: $("#rNote").value.trim() });
+  $("#rAmt").value = $("#rNote").value = ""; saveAG(); renderAgency(); };
+
+/* ============================================================
+   AUTOMATION PROJECTS (+ the 2-day rule)
+   ============================================================ */
+const P_STATUS = ["Idea", "Building", "Testing", "Live", "Paused"];
+const projectActive = () => PJ.list.some(p => p.status === "Building" || p.status === "Testing");
+const projectAskDue = () => !projectActive() && (!PJ.lastAsk || Date.now() - new Date(PJ.lastAsk) >= 2 * 864e5);
+function renderAuto() {
+  const today = todayKey();
+  $("#autoPrompt").innerHTML = projectAskDue() ? `<div class="alert"><div class="t"><b>No automation project is running.</b> What are we building next, Malik?</div><button class="btn sm pri" id="apNew">Start a project</button><button class="btn sm" id="apLater">Ask me in 2 days</button></div>` : "";
+  if ($("#apNew")) { $("#apNew").onclick = () => openProjForm(); $("#apLater").onclick = () => { PJ.lastAsk = new Date().toISOString(); savePJ(); renderAuto(); renderAll(); }; }
+  const order = { Building: 0, Testing: 1, Idea: 2, Live: 3, Paused: 4 };
+  $("#autoList").innerHTML = PJ.list.length ? PJ.list.slice().sort((a, b) => order[a.status] - order[b.status]).map(p => `<div class="proj">
+      <div class="row" style="align-items:center"><b style="flex:1 1 200px;font-size:17px">${esc(p.name)}</b>
+        <select data-pst="${p.id}" aria-label="Status">${P_STATUS.map(s => `<option ${s === p.status ? "selected" : ""}>${s}</option>`).join("")}</select>
+        <span class="num ${p.deadline && p.deadline < today && !["Live", "Paused"].includes(p.status) ? "due" : "hint"}">${p.deadline ? "Due " + dLabel(p.deadline) : "No deadline"}</span></div>
+      ${p.goal ? `<div><span class="hint">Goal:</span> ${esc(p.goal)}</div>` : ""}${p.tools ? `<div><span class="hint">Tools:</span> ${esc(p.tools)}</div>` : ""}
+      <div><span class="hint">Next step:</span> <b>${esc(p.next || "—")}</b></div>
+      ${p.update ? `<div class="hint">Latest (${dLabel((p.updatedAt || "").slice(0, 10))}): ${esc(p.update)}</div>` : ""}
+      <form class="ask" data-pup="${p.id}"><input class="inp" placeholder="Quick update for Jarvis…" aria-label="Project update"><button class="btn sm">Update</button></form>
+      <div class="row"><button class="btn sm" data-pedit="${p.id}" type="button">Edit</button><button class="btn sm" data-pdel="${p.id}" type="button">Delete</button></div></div>`).join("")
+    : '<p class="hint">No projects yet. Start one with New project.</p>';
+  document.querySelectorAll("[data-pst]").forEach(s => s.onchange = () => { const p = PJ.list.find(x => x.id === s.dataset.pst); p.status = s.value; p.updatedAt = new Date().toISOString(); savePJ(); renderAuto(); });
+  document.querySelectorAll("[data-pup]").forEach(f => f.onsubmit = e => { e.preventDefault(); const v = f.querySelector("input").value.trim(); if (!v) return; const p = PJ.list.find(x => x.id === f.dataset.pup); p.update = v; p.updatedAt = new Date().toISOString(); savePJ(); renderAuto(); speakIf("Noted, Malik."); });
+  document.querySelectorAll("[data-pedit]").forEach(b => b.onclick = () => openProjForm(PJ.list.find(x => x.id === b.dataset.pedit)));
+  document.querySelectorAll("[data-pdel]").forEach(b => b.onclick = () => { if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Confirm delete"; return; } PJ.list = PJ.list.filter(x => x.id !== b.dataset.pdel); savePJ(); renderAuto(); });
+}
+function openProjForm(p) { $("#projForm").hidden = false; $("#pId").value = p ? p.id : ""; $("#pName").value = p ? p.name : ""; $("#pStatus").value = p ? p.status : "Building";
+  $("#pDeadline").value = p ? p.deadline || "" : ""; $("#pGoal").value = p ? p.goal || "" : ""; $("#pTools").value = p ? p.tools || "" : ""; $("#pNext").value = p ? p.next || "" : ""; $("#pName").focus(); }
+$("#projAddBtn").onclick = () => openProjForm(); $("#projCancel").onclick = () => { $("#projForm").hidden = true; };
+$("#projForm").onsubmit = e => { e.preventDefault(); const id = $("#pId").value; const data = { name: $("#pName").value.trim(), status: $("#pStatus").value, deadline: $("#pDeadline").value, goal: $("#pGoal").value.trim(), tools: $("#pTools").value.trim(), next: $("#pNext").value.trim(), updatedAt: new Date().toISOString() };
+  if (id) Object.assign(PJ.list.find(x => x.id === id), data); else PJ.list.push({ id: uidShort(), createdAt: new Date().toISOString(), ...data });
+  $("#projForm").hidden = true; savePJ(); renderAuto(); renderAll(); };
+
+/* ============================================================
+   STUDY: assignments to Malik's rules, PDF export
+   ============================================================ */
+let asgCurrent = null;
+$("#rulesSave").onclick = () => { ST.rules = $("#rulesIn").value; saveST(); $("#rulesSaved").textContent = "Saved ✓"; setTimeout(() => $("#rulesSaved").textContent = "", 2000); };
+function renderStudy() {
+  if (document.activeElement !== $("#rulesIn")) $("#rulesIn").value = ST.rules || "";
+  const list = Object.values(ASG).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  $("#asgList").innerHTML = list.length ? list.map(a => `<div class="wsess"><span><b>${esc(a.title)}</b><br><span class="hint">${esc(a.course || "")}${a.due ? " · due " + dLabel(a.due) : ""} · ${a.mode === "draft" ? "Draft + teach" : "Outline"}</span></span>
+      <button class="btn sm" data-aopen="${a.id}" type="button">Open</button><button class="x" data-adel="${a.id}" aria-label="Delete">✕</button></div>`).join("") : '<p class="hint">None yet.</p>';
+  document.querySelectorAll("[data-aopen]").forEach(b => b.onclick = () => showAssignment(ASG[b.dataset.aopen]));
+  document.querySelectorAll("[data-adel]").forEach(b => b.onclick = () => { if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Delete?"; return; } delete ASG[b.dataset.adel]; delSub("study/assignments", b.dataset.adel); if (asgCurrent && asgCurrent.id === b.dataset.adel) $("#asgOut").hidden = true; renderStudy(); });
+}
+function showAssignment(a) {
+  asgCurrent = a; $("#asgOut").hidden = false; $("#asgOutTitle").textContent = a.title; $("#asgOutMode").textContent = a.mode === "draft" ? "Draft + teach me" : "Outline + research";
+  $("#asgBody").innerHTML = miniMd(a.output || ""); $("#asgOutMsg").textContent = "";
+  $("#asgCheck").innerHTML = a.check && a.check.length ? `<div class="h4">Rule check</div>` + a.check.map(c => `<div class="chk ${c.pass ? "ok" : "bad"}"><b>${c.pass ? "✓" : "✕"}</b> ${esc(c.rule)}${c.note ? ` <span class="hint">${esc(c.note)}</span>` : ""}</div>`).join("") : "";
+  $("#asgOut").scrollIntoView({ behavior: "smooth" });
+}
+$("#asgForm").onsubmit = async e => {
+  e.preventDefault(); if (!sample) { $("#aMsg").textContent = "Generating needs Claude access on this page."; return; }
+  const a = { id: uidShort(), course: $("#aCourse").value.trim(), title: $("#aTitle").value.trim(), brief: $("#aBrief").value.trim(), words: +$("#aWords").value || null,
+    due: $("#aDue").value, mode: $("#aMode").value, aiNote: $("#aNote").checked, createdAt: new Date().toISOString(), output: "", check: [] };
+  const rules = (ST.rules || "").trim() || "(no standing rules saved)";
+  const task = a.mode === "draft"
+    ? `Write a complete draft${a.words ? ` of about ${a.words} words (stay within ±10%)` : ""} that follows every rule and the brief. Then add a final section "## Understand & defend it": for each section, 2–3 plain sentences on what it argues and why, plus 3 questions a tutor might ask with short answers.`
+    : `Produce: "## Understanding the brief" (what is really being asked, the marking focus), "## Outline" (headings in order, each with bullet points of what to cover and a word allocation${a.words ? ` totalling ~${a.words}` : ""}), "## Key arguments & evidence to find", "## Research plan" (search terms, databases, types of sources), and "## Checklist before submitting".`;
+  const prompt = `You are helping a university student, Malik, with an assignment.
+STANDING RULES (must follow all):\n${rules}\n
+COURSE: ${a.course || "-"}\nTITLE / QUESTION: ${a.title}\nBRIEF & INSTRUCTIONS:\n${a.brief}\n
+TASK: ${task}
+Integrity rules: never invent sources, statistics, quotes, page numbers or DOIs. Only cite works you are certain exist and mark each "[verify]"; where a source is needed but you are unsure, write [Source needed: what kind]. Use markdown headings (##) and bullet points. No preamble.${a.aiNote ? `\nEnd with one italic line: *AI assistance: Jarvis (Claude) was used to ${a.mode === "draft" ? "draft this text, which the student reviewed and edited" : "plan the structure and research approach"}.*` : ""}`;
+  $("#aGo").disabled = true; $("#aMsg").textContent = "Jarvis is working… (this can take a minute)";
+  $("#asgOut").hidden = false; $("#asgOutTitle").textContent = a.title; $("#asgOutMode").textContent = a.mode === "draft" ? "Draft + teach me" : "Outline + research"; $("#asgCheck").innerHTML = ""; $("#asgBody").innerHTML = '<p class="thinking">Thinking…</p>';
+  try {
+    const r = await sample(prompt, { modelTier: "default", cache: false, onText: ({ text }) => { $("#asgBody").innerHTML = miniMd(text); } });
+    a.output = r.text; $("#asgBody").innerHTML = miniMd(a.output);
+    if (r.truncated) $("#aMsg").textContent = "The answer was cut short. Try a shorter word count or Outline mode.";
+    else $("#aMsg").textContent = "Checking against your rules…";
+    try { const chk = await sample.json(`Check this assignment output against each standing rule and the brief's explicit requirements. Be strict and honest.
+RULES:\n${rules}\nBRIEF:\n${a.brief.slice(0, 4000)}\nWORD TARGET: ${a.words || "none"}\nOUTPUT:\n${a.output.slice(0, 60000)}
+Reply only a JSON array of {"rule":"short rule","pass":true,"note":"max 15 words"} (max 10 items).`, { modelTier: "quick" });
+      a.check = Array.isArray(chk) ? chk.slice(0, 10).map(c => ({ rule: String(c.rule || ""), pass: !!c.pass, note: String(c.note || "") })) : []; } catch (e2) { a.check = []; }
+    ASG[a.id] = a; await saveSub("study/assignments", a.id, a); showAssignment(a); renderStudy(); $("#aMsg").textContent = "Done. Review it, then download the PDF.";
+  } catch (err) { $("#aMsg").textContent = err && err.code === "not_granted" ? "Claude access was declined for this page." : "Couldn't generate just now. Try again."; if (err && err.text) $("#asgBody").innerHTML = miniMd(err.text); }
+  finally { $("#aGo").disabled = false; }
+};
+$("#asgClose").onclick = () => { $("#asgOut").hidden = true; };
+$("#asgCopy").onclick = () => asgCurrent && copyText(asgCurrent.output, $("#asgOutMsg"));
+$("#asgPdf").onclick = async () => {
+  const a = asgCurrent; if (!a) return; const msg = $("#asgOutMsg");
+  try {
+    msg.textContent = "Building PDF…";
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    const doc = new window.jspdf.jsPDF({ unit: "pt", format: "a4" }); const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 60; let y = M;
+    const put = (txt, size, style = "normal", gap = 6, indent = 0) => { doc.setFont("times", style); doc.setFontSize(size);
+      for (const line of doc.splitTextToSize(txt, W - 2 * M - indent)) { if (y > H - M) { doc.addPage(); y = M; } doc.text(line, M + indent, y); y += size * 1.35; } y += gap; };
+    put(a.title, 18, "bold", 4); if (a.course) put(a.course, 11, "italic", 14);
+    for (const raw of a.output.split("\n")) { const l = raw.trim(); const clean = s => s.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1");
+      if (!l) { y += 4; continue; } const h = l.match(/^(#{1,4})\s+(.*)/), b = l.match(/^(?:[-*•]|\d+[.)])\s+(.*)/);
+      if (h) { y += 6; put(clean(h[2]), h[1].length <= 2 ? 14 : 12, "bold", 4); } else if (b) put("•  " + clean(b[1]), 11.5, "normal", 2, 12);
+      else put(clean(l), 11.5, /^\*[^*].*\*$/.test(l) ? "italic" : "normal", 6); }
+    const blob = doc.output("blob"); const name = (a.title || "assignment").replace(/[^\w\- ]+/g, "").trim().slice(0, 60).replace(/\s+/g, "_") + ".pdf";
+    const dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+    if (!dl) { msg.textContent = "Downloads aren't available in this view. Use Copy text instead."; return; }
+    await dl.save({ filename: name, data: blob }); msg.textContent = "PDF ready.";
+  } catch (e) { msg.textContent = e && e.code === "declined" ? "Download cancelled." : "Couldn't make the PDF: " + (e.message || e.code || e); }
+};
+
+/* ============================================================
+   SLEEP: target for muscle growth, bedtime from tomorrow's Fajr
+   ============================================================ */
+function sleepTarget(k) { const wd = new Date(k + "T12:00Z").getUTCDay(); const base = +S.sleepBase || 8; return SESSIONS[wd] ? base + 0.5 : base; }
+// Sleep plan: night sleep ends 10 min before Fajr. Optional second sleep after Fajr (until S.afterFajr) counts toward the target.
+function bedtimeFor(k) {
+  const k2 = dayShift(k, 1), [y, m, d] = k2.split("-").map(Number), fajr = prayersFor(k2).fajr, tgt = sleepTarget(k);
+  let wake = new Date(fajr - 10 * 6e4), second = 0;
+  if (S.afterFajr) { const until = hmToDate({ y, m, d }, S.afterFajr); if (until) second = Math.max(0, until - (fajr.getTime() + 20 * 6e4)); }
+  else if (S.wakeTime) { const w = hmToDate({ y, m, d }, S.wakeTime); if (w) wake = w; }
+  return { wake, second, bed: new Date(wake - Math.max(0, tgt * 36e5 - second) - 15 * 6e4), target: tgt, fajr };
+}
+const segs = k => (DAYS[k] && DAYS[k].sleeps) || [];
+const sleepMs = s => Math.max(0, new Date(s.end) - new Date(s.start));
+const sleepTotal = k => segs(k).reduce((a, s) => a + sleepMs(s), 0);           // all sleep that ended on day k (night + after Fajr + naps)
+const nightOf = k => sleepTotal(k) ? { total: sleepTotal(k), main: segs(k).slice().sort((a, b) => sleepMs(b) - sleepMs(a))[0] } : null;
+function tonightKey(now = new Date()) { const k = keyOf(now); return parts(now).h < 12 ? dayShift(k, -1) : k; }   // after midnight, "tonight" is still yesterday's night
+function toggleSleep() {
+  if (S.sleepOpen) { const end = new Date(), k = keyOf(end), seg = { start: S.sleepOpen, end: end.toISOString() }; day(k).sleeps = day(k).sleeps || []; day(k).sleeps.push(seg); const ms = sleepMs(seg); S.sleepOpen = ""; saveDay(k); saveSettings();
+    speakIf(`Good morning, Malik. You slept ${Math.floor(ms / 36e5)} hours ${Math.round(ms / 6e4) % 60} minutes.`); }
+  else { S.sleepOpen = new Date().toISOString(); saveSettings(); speakIf("Good night, Malik. I'll keep watch."); }
+  renderAll(); renderSleep();
+}
+$("#slBtn").onclick = toggleSleep;
+$("#slForm").onsubmit = e => { e.preventDefault(); const k = $("#slNight").value || todayKey(); const [y, m, d] = k.split("-").map(Number);
+  const out = hmToDate({ y, m, d }, $("#slOut").value); let inn = hmToDate({ y, m, d }, $("#slIn").value); if (inn >= out) inn = new Date(inn - 864e5);
+  day(k).sleeps = day(k).sleeps || []; day(k).sleeps.push({ start: inn.toISOString(), end: out.toISOString() }); saveDay(k); renderSleep(); renderAll(); };
+function renderSleep() {
+  const now = new Date(), tk = tonightKey(now), bt = bedtimeFor(tk);
+  $("#slTargetTag").textContent = `Target ${bt.target} h`; $("#slBed").textContent = T(bt.bed);
+  $("#slWhy").textContent = `${SESSIONS[new Date(tk + "T12:00Z").getUTCDay()] ? "Training day: +30 min for recovery." : "Rest day."} ` +
+    (bt.second ? `Night sleep until ${T(bt.wake)} (Fajr ${T(bt.fajr)}), then ${hm2(bt.second)} after Fajr until ${hm12(S.afterFajr)}.` : S.wakeTime ? `Up at ${T(bt.wake)}.` : `Up at ${T(bt.wake)}, 10 minutes before Fajr (${T(bt.fajr)}).`) + " Includes 15 minutes to fall asleep." +
+    (parts(bt.bed).h < 21 && parts(bt.bed).h > 12 ? " That's early: if it isn't realistic, set a second sleep after Fajr in Setup and the plan will split." : "");
+  $("#slBtn").textContent = S.sleepOpen ? "I'm awake" : "Going to sleep"; $("#slBtn").className = S.sleepOpen ? "btn ok" : "btn pri";
+  $("#slState").textContent = S.sleepOpen ? `Sleeping since ${T(new Date(S.sleepOpen))}` : "";
+  if (!$("#slNight").value) $("#slNight").value = todayKey();
+  const keys = [6, 5, 4, 3, 2, 1, 0].map(i => dayShift(todayKey(), -i)); const vals = keys.map(k => sleepTotal(k));
+  const max = Math.max(10 * 36e5, ...vals);
+  $("#slBars").innerHTML = keys.map((k, i) => { const tgt = sleepTarget(dayShift(k, -1)); const ok = vals[i] >= tgt * 36e5 - 15 * 6e4;
+    return `<div class="${k === todayKey() ? "today" : ""}" title="${vals[i] ? hm2(vals[i]) : "not logged"}"><span>${vals[i] ? (vals[i] / 36e5).toFixed(1) : ""}</span><i style="height:${vals[i] / max * 80}%;background:${vals[i] ? (ok ? "var(--ok)" : "var(--accent)") : "transparent"}"></i><span>${DOW[new Date(k + "T12:00Z").getUTCDay()]}</span></div>`; }).join("");
+  const logged = keys.filter(k => nightOf(k));
+  $("#slAvg").textContent = logged.length ? `avg ${hm2(logged.reduce((a, k) => a + sleepTotal(k), 0) / logged.length)}` : "";
+  const debt = logged.reduce((a, k) => a + Math.max(0, sleepTarget(dayShift(k, -1)) * 36e5 - sleepTotal(k)), 0);
+  $("#slDebt").textContent = logged.length ? (debt ? hm2(debt) : "none") : "—"; $("#slDebt").style.color = debt > 3 * 36e5 ? "var(--err)" : "";
+  const mins = logged.map(k => { const p = parts(new Date(nightOf(k).main.start)); let m = p.h * 60 + p.mi; if (m < 12 * 60) m += 1440; return m; });
+  if (mins.length >= 2) { const avg = mins.reduce((a, b) => a + b, 0) / mins.length; const sd = Math.sqrt(mins.reduce((a, b) => a + (b - avg) ** 2, 0) / mins.length);
+    $("#slCons").textContent = sd <= 30 ? `steady (±${Math.round(sd)} min)` : `varies ±${Math.round(sd)} min`; } else $("#slCons").textContent = "—";
+}
+
+/* ---------- work sub-tabs ---------- */
+let WT = "focus";
+function setWT(t) { WT = t; document.querySelectorAll("#workTabs [data-wt]").forEach(b => b.setAttribute("aria-current", b.dataset.wt === t)); ["focus", "linkedin", "agency", "auto"].forEach(x => $("#wt-" + x).hidden = x !== t); renderWorkPane(); }
+function renderWorkPane() { if (WT === "focus") renderFocus(); else if (WT === "linkedin") renderCRM(); else if (WT === "agency") renderAgency(); else renderAuto(); }
+document.querySelectorAll("#workTabs [data-wt]").forEach(b => b.onclick = () => setWT(b.dataset.wt));
+
+/* ============================================================
+   Navigation, loop, boot
+   ============================================================ */
+function go(view) {
+  document.querySelectorAll("section[id^=v-]").forEach(s => s.hidden = s.id !== "v-" + view);
+  document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
+  if (view === "setup") fillSetup(); renderAll(); window.scrollTo(0, 0);
+}
+document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => go(b.dataset.view));
+
+
+function applyDoc(id, data) { if (!data) return; data = JSON.parse(JSON.stringify(data));   // snapshots are frozen: keep editable copies
+  if (id === "settings") S = { ...structuredClone(DEFAULTS), ...data }; else if (id.startsWith("day-")) DAYS[id.slice(4)] = data;
+  else if (id === "agency") AG = { clients: [], team: [], revenue: [], ...data }; else if (id === "projects") PJ = { list: [], lastAsk: "", ...data }; else if (id === "study") ST = { rules: "", ...data }; }
+
+(function bootLocal() { const s = local("settings"); if (s) S = { ...structuredClone(DEFAULTS), ...s }; const d = local("days"); if (d) DAYS = d;
+  ["agency", "projects", "study"].forEach(id => { const v = local("doc." + id); if (v) applyDoc(id, v); });
+  Object.assign(LEADS, local("sub.crm/leads") || {}); Object.assign(ASG, local("sub.study/assignments") || {}); })();
+renderAll(); setInterval(() => { renderAll(); checkAlerts(); }, 15000);
+
+(async () => {
+  const use = window.claude && window.claude.use ? window.claude.use.bind(window.claude) : null;
+  if (!use) { setSync("Saved on this device only", "warn"); return; }
+  use("sample").then(s => { sample = s; }).catch(() => {});
+  try {
+    const [dbx, user] = await Promise.all([use("db"), use("user")]);
+    if (!dbx || !user) { setSync("Saved on this device only", "warn"); return; }
+    uid = await user.id(); db = dbx;
+    if (!uid) { db = null; setSync("Sign in to sync", "warn"); return; }
+    setSync("Syncing…");
+    db.collection("data/users/" + uid).onSnapshot(snap => {
+      snap.docs.forEach(d => applyDoc(d.id, d.data()));
+      setSync("Synced", "live"); if (!$("#v-setup").hidden && !document.activeElement?.closest("#setupForm")) fillSetup();
+      if (!document.activeElement || !document.activeElement.closest(".leditor,.tm-row,form")) renderAll(); else renderNow();
+    }, () => setSync("Sync paused", "warn"));
+    const live = (name, store, after) => db.collection(`data/users/${uid}/${name}`).onSnapshot(snap => {
+      for (const ch of snap.docChanges()) { if (ch.type === "removed") delete store[ch.doc.id]; else store[ch.doc.id] = JSON.parse(JSON.stringify(ch.doc.data())); }
+      if (!document.activeElement || !document.activeElement.closest(".leditor,#asgForm")) after(); }, () => {});
+    live("crm/leads", LEADS, () => { if (!$("#v-work").hidden && WT === "linkedin") renderCRM(); });
+    live("study/assignments", ASG, () => { if (!$("#v-study").hidden) renderStudy(); });
+  } catch (e) { db = null; setSync("Saved on this device only", "warn"); }
+})();
+</script>
+
+</body></html>
